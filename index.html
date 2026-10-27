@@ -74,6 +74,7 @@
   <dialog id="detail-dialog" class="detail-dialog">
     <div class="dialog-head"><div><p class="eyebrow">DETALLE DEL EXPEDIENTE</p><h3 id="detail-title">Expediente</h3></div><button type="button" class="icon-btn" id="close-detail" aria-label="Cerrar">×</button></div>
     <div id="detail-meta" class="detail-meta"></div>
+    <button id="open-client-preview" type="button" class="ghost">Vista previa del cliente</button>
     <div id="state-list" class="state-list"></div>
     <div class="case-management">
       <h4>Gestión interna</h4>
@@ -86,6 +87,15 @@
       </div>
       <section><h4>Documentos</h4><form id="document-form" class="document-form"><input id="document-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.docx" required><label class="check-row"><input id="document-visible" type="checkbox"> Visible para el cliente</label><button class="ghost" type="submit">Subir documento</button></form><div id="document-list" class="mini-list"></div></section>
     </div>
+  </dialog>
+
+  <dialog id="client-preview-dialog" class="client-preview-dialog">
+    <div class="client-preview-top"><div class="brand"><div class="mark small"><span></span><span></span><span></span><span></span></div><div><strong>Seguimiento BANHVI</strong><small>Portal del cliente</small></div></div><button type="button" class="icon-btn" id="close-client-preview" aria-label="Cerrar">×</button></div>
+    <div class="client-hero"><p class="eyebrow">ESTADO DE SU SOLICITUD</p><h3 id="client-preview-title">Expediente</h3><p id="client-preview-updated"></p><div id="client-preview-status" class="client-status"></div></div>
+    <section class="client-section"><h4>Historial del trámite</h4><div id="client-preview-states" class="state-list"></div></section>
+    <section class="client-section"><h4>Información compartida</h4><div id="client-preview-notes" class="mini-list"></div></section>
+    <section class="client-section"><h4>Documentos disponibles</h4><div id="client-preview-documents" class="mini-list"></div></section>
+    <p class="client-help">Esta es una vista previa. El cliente solamente verá la información que usted haya marcado como visible.</p>
   </dialog>
 
   <div id="toast" class="toast" role="status"></div>
