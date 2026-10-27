@@ -36,7 +36,7 @@ async function loadData() {
   $('#sync-status').innerHTML='<i></i> Actualizando…';
   const [watchResult,eventResult] = await Promise.all([
     client.from('monitor_watches').select('*').order('created_at',{ascending:false}),
-    client.from('monitor_outbox').select('id,watch_id,status,created_at,sent_at,before_states,after_states').order('created_at',{ascending:false}).limit(20)
+    client.from('monitor_outbox').select('id,watch_id,status,created_at,sent_at,before_states,after_states').order('created_at',{ascending:false})
   ]);
   if (watchResult.error || eventResult.error) { toast('No fue posible cargar los datos'); return; }
   watches=watchResult.data||[]; events=eventResult.data||[];
@@ -71,6 +71,36 @@ function renderActivity(){
   $('#activity-list').innerHTML=events.length?events.map(e=>{const w=watches.find(x=>x.id===e.watch_id);return `<div class="activity"><span class="activity-dot"></span><div><p><strong>${escapeHtml(w?.label||'Expediente')}</strong> registró un cambio de estado.</p><small>${e.status==='sent'?'Correo enviado':e.status==='review_required'?'Requiere revisión':'Notificación pendiente'}</small></div><small>${escapeHtml(formatDate(e.created_at))}</small></div>`}).join(''):'<div class="empty">Todavía no hay cambios nuevos. Todo permanece estable.</div>';
 }
 
+function stateDifference(before=[], after=[]) {
+  const key=s=>`${s.date}|${s.description}`;
+  const previous=new Set((before||[]).map(key)),current=new Set((after||[]).map(key));
+  return {added:(after||[]).filter(s=>!previous.has(key(s))).map(s=>`${s.date} — ${s.description}`).join('\n'),removed:(before||[]).filter(s=>!current.has(key(s))).map(s=>`${s.date} — ${s.description}`).join('\n')};
+}
+
+async function exportExcel(){
+  if(!watches.length){toast('No hay expedientes para exportar');return;}
+  const button=$('#export-btn');button.disabled=true;button.textContent='Preparando Excel…';
+  try{
+    const workbook=new ExcelJS.Workbook();workbook.creator='Monitor BANHVI';workbook.created=new Date();
+    const configure=(sheet,columns)=>{sheet.columns=columns;sheet.views=[{state:'frozen',ySplit:1}];sheet.autoFilter={from:'A1',to:`${String.fromCharCode(64+columns.length)}1`};sheet.getRow(1).height=24;sheet.getRow(1).eachCell(cell=>{cell.font={bold:true,color:{argb:'FFFFFFFF'}};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF0B3B47'}};cell.alignment={vertical:'middle'};});};
+    const summary=workbook.addWorksheet('Expedientes');
+    configure(summary,[{header:'Nombre o referencia',key:'label',width:28},{header:'Cédula',key:'cedula',width:16},{header:'Caso BANHVI',key:'case',width:17},{header:'Monitoreo',key:'enabled',width:14},{header:'Estado actual',key:'state',width:34},{header:'Última revisión',key:'checked',width:22},{header:'Versión',key:'version',width:11},{header:'Error reciente',key:'error',width:22}]);
+    watches.forEach(w=>summary.addRow({label:w.label||'',cedula:w.cedula,case:w.case_number||'',enabled:w.enabled?'Activo':'Pausado',state:latestState(w.last_states),checked:w.last_success_at?new Date(w.last_success_at):null,version:w.version,error:w.last_error||''}));
+    summary.getColumn('cedula').numFmt='@';summary.getColumn('case').numFmt='@';summary.getColumn('checked').numFmt='dd/mm/yyyy hh:mm';
+    const states=workbook.addWorksheet('Estados');
+    configure(states,[{header:'Nombre o referencia',key:'label',width:28},{header:'Cédula',key:'cedula',width:16},{header:'Caso BANHVI',key:'case',width:17},{header:'Fecha del estado',key:'date',width:18},{header:'Descripción',key:'description',width:48}]);
+    watches.forEach(w=>(w.last_states||[]).forEach(s=>states.addRow({label:w.label||'',cedula:w.cedula,case:w.case_number||'',date:s.date,description:s.description})));states.getColumn('cedula').numFmt='@';states.getColumn('case').numFmt='@';
+    const changes=workbook.addWorksheet('Cambios');
+    configure(changes,[{header:'Nombre o referencia',key:'label',width:28},{header:'Cédula',key:'cedula',width:16},{header:'Caso BANHVI',key:'case',width:17},{header:'Detectado',key:'created',width:22},{header:'Notificación',key:'status',width:20},{header:'Correo enviado',key:'sent',width:22},{header:'Estados agregados',key:'added',width:48},{header:'Estados eliminados',key:'removed',width:48}]);
+    events.forEach(e=>{const w=watches.find(x=>x.id===e.watch_id)||{},diff=stateDifference(e.before_states,e.after_states);changes.addRow({label:w.label||'',cedula:w.cedula||'',case:w.case_number||'',created:new Date(e.created_at),status:e.status==='sent'?'Enviada':e.status==='review_required'?'Requiere revisión':'Pendiente',sent:e.sent_at?new Date(e.sent_at):null,added:diff.added,removed:diff.removed});});
+    changes.getColumn('cedula').numFmt='@';changes.getColumn('case').numFmt='@';changes.getColumn('created').numFmt='dd/mm/yyyy hh:mm';changes.getColumn('sent').numFmt='dd/mm/yyyy hh:mm';
+    [summary,states,changes].forEach(sheet=>sheet.eachRow((row,n)=>{if(n>1&&n%2===0)row.eachCell(cell=>cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF1F7F4'}});row.alignment={vertical:'top',wrapText:true};}));
+    const buffer=await workbook.xlsx.writeBuffer(),url=URL.createObjectURL(new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    const link=document.createElement('a');link.href=url;link.download=`monitor-banhvi-${new Date().toISOString().slice(0,10)}.xlsx`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Excel descargado');
+  }catch(error){console.error(error);toast('No fue posible generar el Excel');}
+  finally{button.disabled=false;button.textContent='Exportar a Excel';}
+}
+
 async function addWatch(event){
   event.preventDefault(); const cedula=$('#cedula').value.trim(),label=$('#label').value.trim(),message=$('#add-message');
   if(!/^\d{9,12}$/.test(cedula)){message.textContent='Ingresá una cédula de 9 a 12 dígitos.';message.className='message error';return;}
@@ -84,6 +114,7 @@ function openDetail(id){const w=watches.find(x=>x.id===id);if(!w)return;$('#deta
 async function showSession(session){ if(!session){loginView.classList.remove('hidden');appView.classList.add('hidden');return;}if(!await isAdmin(session.user.email)){await client.auth.signOut();$('#login-message').textContent='Este usuario no está autorizado.';return;}loginView.classList.add('hidden');appView.classList.remove('hidden');await loadData();}
 
 $('#login-form').addEventListener('submit',signIn); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=loadData; $('#logout-btn').onclick=()=>client.auth.signOut(); $('#search').addEventListener('input',e=>renderWatches(e.target.value));
+$('#export-btn').onclick=exportExcel;
 client.auth.onAuthStateChange((_event,session)=>setTimeout(()=>showSession(session),0));
 client.auth.getSession().then(({data})=>showSession(data.session));
 
