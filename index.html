@@ -13,6 +13,13 @@
 <body>
   <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
   <main>
+    <section id="client-public-view" class="client-public-shell hidden">
+      <div class="client-public-card">
+        <div class="brand"><div class="mark small"><span></span><span></span><span></span><span></span></div><div><strong>Seguimiento BANHVI</strong><small>Consulta para clientes</small></div></div>
+        <div id="client-search-panel"><p class="eyebrow">CONSULTE SU EXPEDIENTE</p><h1>Estado de su solicitud</h1><p class="lead">Ingrese los datos exactos proporcionados por su asesor.</p><form id="client-search-form"><label for="client-cedula">Número de cédula</label><input id="client-cedula" inputmode="numeric" pattern="[0-9]{9,12}" maxlength="12" required><label for="client-case">Número de caso BANHVI</label><input id="client-case" inputmode="numeric" pattern="[0-9]{5,20}" maxlength="20" required><button class="primary" type="submit">Consultar estado →</button></form><p id="client-search-message" class="message" role="status"></p><a class="admin-link" href="./">Acceso administrativo</a></div>
+        <div id="client-result" class="hidden"><button id="client-new-search" class="ghost" type="button">← Nueva consulta</button><div class="client-hero"><p class="eyebrow">ESTADO DE SU SOLICITUD</p><h2 id="public-client-title"></h2><p id="public-client-updated"></p><div id="public-client-status" class="client-status"></div></div><section class="client-section"><h3>Historial del trámite</h3><div id="public-client-states" class="state-list"></div></section><section class="client-section"><h3>Información compartida</h3><div id="public-client-notes" class="mini-list"></div></section><section class="client-section"><h3>Documentos disponibles</h3><div id="public-client-documents" class="mini-list"></div></section></div>
+      </div>
+    </section>
     <section id="login-view" class="auth-shell">
       <div class="auth-card">
         <div class="mark" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
@@ -102,6 +109,6 @@
 
   <div id="toast" class="toast" role="status"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="app.js?v=20261027-2"></script>
+  <script src="app.js?v=20261027-3"></script>
 </body>
 </html>
