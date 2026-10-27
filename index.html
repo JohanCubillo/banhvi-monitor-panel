@@ -36,17 +36,17 @@
       </header>
 
       <div class="content">
-        <div class="welcome"><div><p class="eyebrow">RESUMEN GENERAL</p><h2>Buenos días, Johan</h2><p>Revisamos BANHVI cada 30 minutos, de 7:17 a. m. a 7:17 p. m.</p></div><div class="welcome-actions"><button id="export-btn" class="ghost">Exportar a Excel</button><button id="open-add" class="primary compact">+ Nuevo expediente</button></div></div>
+        <div class="welcome"><div><p class="eyebrow">RESUMEN GENERAL</p><h2>Buenos días, Johan</h2><p>Revisamos BANHVI cada 30 minutos, de 7:17 a. m. a 7:17 p. m.</p></div><div class="welcome-actions"><button id="import-btn" class="ghost">Importar CSV</button><button id="export-btn" class="ghost">Exportar a Excel</button><button id="open-add" class="primary compact">+ Nuevo expediente</button><input id="import-file" type="file" accept=".csv,text/csv" hidden></div></div>
 
         <div class="metrics">
           <article><span>Expedientes</span><strong id="metric-total">0</strong><small>registrados</small></article>
           <article><span>Monitoreo activo</span><strong id="metric-active">0</strong><small>en seguimiento</small></article>
           <article><span>Cambios detectados</span><strong id="metric-changes">0</strong><small>históricos</small></article>
-          <article><span>Requieren atención</span><strong id="metric-errors">0</strong><small>con error reciente</small></article>
+          <article><span>Requieren atención</span><strong id="metric-errors">0</strong><small>vencidos o con error</small></article>
         </div>
 
         <section class="panel">
-          <div class="panel-head"><div><h3>Expedientes monitoreados</h3><p>Estado más reciente de cada consulta.</p></div><div class="search-wrap"><input id="search" type="search" placeholder="Buscar por nombre, cédula o caso"></div></div>
+          <div class="panel-head"><div><h3>Expedientes monitoreados</h3><p>Estado más reciente de cada consulta.</p></div><div class="filters"><div class="search-wrap"><input id="search" type="search" placeholder="Buscar por nombre, cédula o caso"></div><select id="status-filter" aria-label="Filtrar por semáforo"><option value="">Todos</option><option value="red">Requieren atención</option><option value="yellow">Próximos a vencer</option><option value="green">Al día</option></select><select id="priority-filter" aria-label="Filtrar por prioridad"><option value="">Toda prioridad</option><option value="urgent">Urgente</option><option value="high">Alta</option><option value="normal">Normal</option><option value="low">Baja</option></select></div></div>
           <div id="watch-list" class="watch-list"><div class="empty">Cargando expedientes…</div></div>
         </section>
 
@@ -75,6 +75,17 @@
     <div class="dialog-head"><div><p class="eyebrow">DETALLE DEL EXPEDIENTE</p><h3 id="detail-title">Expediente</h3></div><button type="button" class="icon-btn" id="close-detail" aria-label="Cerrar">×</button></div>
     <div id="detail-meta" class="detail-meta"></div>
     <div id="state-list" class="state-list"></div>
+    <div class="case-management">
+      <h4>Gestión interna</h4>
+      <div class="management-grid"><label>Prioridad<select id="detail-priority"><option value="low">Baja</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label><label>Responsable<input id="detail-assigned" placeholder="Nombre o correo"></label><label>Fecha límite<input id="detail-due" type="datetime-local"></label><label>Correo del cliente<input id="detail-client-email" type="email" placeholder="cliente@correo.com"></label></div>
+      <label class="check-row"><input id="detail-client-portal" type="checkbox"> Permitir acceso al cliente cuando se habilite el portal</label>
+      <button id="save-management" type="button" class="primary compact">Guardar gestión</button>
+      <div class="detail-columns">
+        <section><h4>Notas</h4><form id="note-form"><textarea id="note-body" maxlength="4000" placeholder="Agregar una nota…" required></textarea><label class="check-row"><input id="note-visible" type="checkbox"> Visible para el cliente</label><button class="ghost" type="submit">Agregar nota</button></form><div id="note-list" class="mini-list"></div></section>
+        <section><h4>Tareas</h4><form id="task-form"><input id="task-title" maxlength="240" placeholder="Próxima acción" required><input id="task-due" type="datetime-local"><button class="ghost" type="submit">Crear tarea</button></form><div id="task-list" class="mini-list"></div></section>
+      </div>
+      <section><h4>Documentos</h4><form id="document-form" class="document-form"><input id="document-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.docx" required><label class="check-row"><input id="document-visible" type="checkbox"> Visible para el cliente</label><button class="ghost" type="submit">Subir documento</button></form><div id="document-list" class="mini-list"></div></section>
+    </div>
   </dialog>
 
   <div id="toast" class="toast" role="status"></div>
