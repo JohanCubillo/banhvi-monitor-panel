@@ -19,6 +19,11 @@ function trafficStatus(watch){
   if(watch.last_success_at&&(Date.now()-new Date(watch.last_success_at))/864e5>3)return 'yellow';
   return 'green';
 }
+function formalizationInfo(states=[]){
+  const emitted=(states||[]).filter(s=>String(s.description||'').trim().toUpperCase()==='EMITIDO').sort((a,b)=>{const [da,ma,ya]=a.date.split('/').map(Number),[db,mb,yb]=b.date.split('/').map(Number);return new Date(yb,mb-1,db)-new Date(ya,ma-1,da);})[0];
+  if(!emitted)return null;const [d,m,y]=emitted.date.split('/').map(Number),start=new Date(y,m-1,d),deadline=new Date(start);deadline.setDate(deadline.getDate()+90);const today=new Date();today.setHours(0,0,0,0);return{date:deadline,days:Math.ceil((deadline-today)/864e5)};
+}
+function formalizationHtml(states){const info=formalizationInfo(states);if(!info)return'';const date=new Intl.DateTimeFormat('es-CR',{dateStyle:'long'}).format(info.date),text=info.days<0?`Plazo de formalización vencido hace ${Math.abs(info.days)} días`:info.days===0?'El plazo de formalización vence hoy':`Faltan ${info.days} días para completar 90 días desde EMITIDO`;return`<span class="deadline-alert ${info.days<=5?'urgent':''}">${escapeHtml(text)} · ${escapeHtml(date)}</span>`;}
 
 function formatDate(value) {
   if (!value) return 'Aún no revisado';
@@ -145,11 +150,11 @@ function openClientPreview(){
   const sharedNotes=notes.filter(n=>n.watch_id===w.id&&n.client_visible),sharedDocs=documents.filter(d=>d.watch_id===w.id&&d.client_visible),states=Array.isArray(w.last_states)?[...w.last_states].reverse():[];
   $('#client-preview-title').textContent=w.label||'Su expediente';
   $('#client-preview-updated').textContent=`Última actualización: ${formatDate(w.last_success_at)}`;
-  $('#client-preview-status').innerHTML=`<span class="traffic ${trafficStatus(w)}"></span>${escapeHtml(latestState(w.last_states))}`;
+  $('#client-preview-status').innerHTML=`<span class="traffic ${trafficStatus(w)}"></span>${escapeHtml(latestState(w.last_states))}${formalizationHtml(w.last_states)}`;
   $('#client-preview-states').innerHTML=states.length?states.map(s=>`<div class="state"><time>${escapeHtml(s.date)}</time><strong>${escapeHtml(s.description)}</strong></div>`).join(''):'<div class="empty">Aún no hay estados disponibles.</div>';
   $('#client-preview-notes').innerHTML=sharedNotes.length?sharedNotes.map(n=>`<div class="mini-item"><p>${escapeHtml(n.body)}</p><small>${formatDate(n.created_at)}</small></div>`).join(''):'<div class="empty">No hay información adicional compartida.</div>';
   $('#client-preview-documents').innerHTML=sharedDocs.length?sharedDocs.map(d=>`<div class="mini-item"><strong>${escapeHtml(d.name)}</strong><br><small>Documento disponible para el cliente</small></div>`).join(''):'<div class="empty">No hay documentos compartidos.</div>';
-  $('#client-preview-dialog').classList.remove('hidden');
+  $('#detail-dialog').close();$('#client-preview-dialog').classList.remove('hidden');
   document.body.style.overflow='hidden';
 }
 
@@ -174,6 +179,13 @@ async function importCsv(file){
   const {error}=await client.from('monitor_watches').upsert(rows,{onConflict:'cedula',ignoreDuplicates:true});if(error){toast('No se pudo importar el archivo');return;}toast(`${rows.length} filas procesadas`);await loadData();
 }
 
+async function searchClientCase(event){
+  event.preventDefault();const cedula=$('#client-cedula').value.replace(/\D/g,''),caseNumber=$('#client-case').value.replace(/\D/g,''),message=$('#client-search-message');message.textContent='Consultando…';
+  const {data,error}=await client.rpc('lookup_client_case',{p_cedula:cedula,p_case_number:caseNumber});if(error||!data){message.textContent='No encontramos un expediente habilitado con esos datos.';message.className='message error';return;}
+  message.textContent='';message.className='message';$('#client-search-panel').classList.add('hidden');$('#client-result').classList.remove('hidden');$('#public-client-title').textContent=data.label||'Su expediente';$('#public-client-updated').textContent=`Última actualización: ${formatDate(data.last_success_at)}`;$('#public-client-status').innerHTML=`${escapeHtml(latestState(data.last_states))}${formalizationHtml(data.last_states)}`;
+  const states=Array.isArray(data.last_states)?[...data.last_states].reverse():[];$('#public-client-states').innerHTML=states.length?states.map(s=>`<div class="state"><time>${escapeHtml(s.date)}</time><strong>${escapeHtml(s.description)}</strong></div>`).join(''):'<div class="empty">Aún no hay estados disponibles.</div>';$('#public-client-notes').innerHTML=(data.notes||[]).length?data.notes.map(n=>`<div class="mini-item"><p>${escapeHtml(n.body)}</p><small>${formatDate(n.created_at)}</small></div>`).join(''):'<div class="empty">No hay información adicional compartida.</div>';$('#public-client-documents').innerHTML=(data.documents||[]).length?data.documents.map(d=>`<div class="mini-item"><strong>${escapeHtml(d.name)}</strong></div>`).join(''):'<div class="empty">No hay documentos compartidos.</div>';
+}
+
 async function showSession(session){ if(!session){loginView.classList.remove('hidden');appView.classList.add('hidden');return;}if(!await isAdmin(session.user.email)){await client.auth.signOut();$('#login-message').textContent='Este usuario no está autorizado.';return;}loginView.classList.add('hidden');appView.classList.remove('hidden');await loadData();}
 
 $('#login-form').addEventListener('submit',signIn); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=loadData; $('#logout-btn').onclick=()=>client.auth.signOut(); $('#search').addEventListener('input',e=>renderWatches(e.target.value));
@@ -182,5 +194,6 @@ $('#status-filter').onchange=()=>renderWatches($('#search').value);$('#priority-
 $('#import-btn').onclick=()=>$('#import-file').click();$('#import-file').onchange=event=>{const file=event.target.files[0];if(file)importCsv(file);event.target.value='';};
 $('#save-management').onclick=saveManagement;$('#note-form').addEventListener('submit',addNote);$('#task-form').addEventListener('submit',addTask);$('#document-form').addEventListener('submit',uploadDocument);
 $('#open-client-preview').onclick=openClientPreview;$('#close-client-preview').onclick=closeClientPreview;
-client.auth.onAuthStateChange((_event,session)=>setTimeout(()=>showSession(session),0));
-client.auth.getSession().then(({data})=>showSession(data.session));
+const clientMode=new URLSearchParams(location.search).get('cliente')==='1';
+if(clientMode){loginView.classList.add('hidden');appView.classList.add('hidden');$('#client-public-view').classList.remove('hidden');$('#client-search-form').addEventListener('submit',searchClientCase);$('#client-new-search').onclick=()=>{$('#client-result').classList.add('hidden');$('#client-search-panel').classList.remove('hidden');$('#client-search-form').reset();};}
+else{client.auth.onAuthStateChange((_event,session)=>setTimeout(()=>showSession(session),0));client.auth.getSession().then(({data})=>showSession(data.session));}
