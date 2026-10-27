@@ -21,9 +21,9 @@ function trafficStatus(watch){
 }
 function formalizationInfo(states=[]){
   const emitted=(states||[]).filter(s=>String(s.description||'').trim().toUpperCase()==='EMITIDO').sort((a,b)=>{const [da,ma,ya]=a.date.split('/').map(Number),[db,mb,yb]=b.date.split('/').map(Number);return new Date(yb,mb-1,db)-new Date(ya,ma-1,da);})[0];
-  if(!emitted)return null;const [d,m,y]=emitted.date.split('/').map(Number),start=new Date(y,m-1,d),deadline=new Date(start);deadline.setDate(deadline.getDate()+90);const today=new Date();today.setHours(0,0,0,0);return{date:deadline,days:Math.ceil((deadline-today)/864e5)};
+  if(!emitted)return null;const [d,m,y]=emitted.date.split('/').map(Number),start=new Date(y,m-1,d),deadline=new Date(start);deadline.setDate(deadline.getDate()+90);const today=new Date();today.setHours(0,0,0,0);const elapsed=Math.max(0,Math.floor((today-start)/864e5));return{emittedDate:start,date:deadline,days:Math.ceil((deadline-today)/864e5),elapsed};
 }
-function formalizationHtml(states){const info=formalizationInfo(states);if(!info)return'';const date=new Intl.DateTimeFormat('es-CR',{dateStyle:'long'}).format(info.date),text=info.days<0?`Plazo de formalización vencido hace ${Math.abs(info.days)} días`:info.days===0?'El plazo de formalización vence hoy':`Faltan ${info.days} días para completar 90 días desde EMITIDO`;return`<span class="deadline-alert ${info.days<=5?'urgent':''}">${escapeHtml(text)} · ${escapeHtml(date)}</span>`;}
+function formalizationHtml(states){const info=formalizationInfo(states);if(!info)return'';const deadline=new Intl.DateTimeFormat('es-CR',{dateStyle:'long'}).format(info.date),elapsedText=info.elapsed===0?'Emitido hoy':info.elapsed===1?'Ha pasado 1 día desde EMITIDO':`Han pasado ${info.elapsed} días desde EMITIDO`;const remainingText=info.days<0?`El límite interno de 90 días venció hace ${Math.abs(info.days)} días`:info.days===0?'El límite interno de 90 días vence hoy':info.days===1?'Falta 1 día para el límite interno de 90 días':`Faltan ${info.days} días para el límite interno de 90 días`;return`<span class="deadline-alert ${info.days<=10?'urgent':''}"><strong>${escapeHtml(elapsedText)}</strong><small>${escapeHtml(remainingText)} · ${escapeHtml(deadline)}</small></span>`;}
 
 function formatDate(value) {
   if (!value) return 'Aún no revisado';
@@ -198,3 +198,4 @@ $('#open-client-preview').onclick=openClientPreview;$('#close-client-preview').o
 const clientMode=new URLSearchParams(location.search).get('cliente')==='1';
 if(clientMode){loginView.classList.add('hidden');appView.classList.add('hidden');$('#client-public-view').classList.remove('hidden');$('#client-search-form').addEventListener('submit',searchClientCase);$('#client-new-search').onclick=()=>{$('#client-result').classList.add('hidden');$('#client-search-panel').classList.remove('hidden');$('#client-search-form').reset();};}
 else{client.auth.onAuthStateChange((_event,session)=>setTimeout(()=>showSession(session),0));client.auth.getSession().then(({data})=>showSession(data.session));}
+
