@@ -149,7 +149,13 @@ function openClientPreview(){
   $('#client-preview-states').innerHTML=states.length?states.map(s=>`<div class="state"><time>${escapeHtml(s.date)}</time><strong>${escapeHtml(s.description)}</strong></div>`).join(''):'<div class="empty">Aún no hay estados disponibles.</div>';
   $('#client-preview-notes').innerHTML=sharedNotes.length?sharedNotes.map(n=>`<div class="mini-item"><p>${escapeHtml(n.body)}</p><small>${formatDate(n.created_at)}</small></div>`).join(''):'<div class="empty">No hay información adicional compartida.</div>';
   $('#client-preview-documents').innerHTML=sharedDocs.length?sharedDocs.map(d=>`<div class="mini-item"><strong>${escapeHtml(d.name)}</strong><br><small>Documento disponible para el cliente</small></div>`).join(''):'<div class="empty">No hay documentos compartidos.</div>';
-  $('#client-preview-dialog').showModal();
+  $('#detail-dialog').close();
+  requestAnimationFrame(()=>$('#client-preview-dialog').showModal());
+}
+
+function closeClientPreview(){
+  $('#client-preview-dialog').close();
+  if(currentWatchId)requestAnimationFrame(()=>openDetail(currentWatchId));
 }
 
 async function saveManagement(){
@@ -175,6 +181,6 @@ $('#export-btn').onclick=exportExcel;
 $('#status-filter').onchange=()=>renderWatches($('#search').value);$('#priority-filter').onchange=()=>renderWatches($('#search').value);
 $('#import-btn').onclick=()=>$('#import-file').click();$('#import-file').onchange=event=>{const file=event.target.files[0];if(file)importCsv(file);event.target.value='';};
 $('#save-management').onclick=saveManagement;$('#note-form').addEventListener('submit',addNote);$('#task-form').addEventListener('submit',addTask);$('#document-form').addEventListener('submit',uploadDocument);
-$('#open-client-preview').onclick=openClientPreview;$('#close-client-preview').onclick=()=>$('#client-preview-dialog').close();
+$('#open-client-preview').onclick=openClientPreview;$('#close-client-preview').onclick=closeClientPreview;
 client.auth.onAuthStateChange((_event,session)=>setTimeout(()=>showSession(session),0));
 client.auth.getSession().then(({data})=>showSession(data.session));
