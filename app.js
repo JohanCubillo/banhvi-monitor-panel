@@ -78,8 +78,9 @@ function render() {
 
 function renderWatches(query='') {
   const q=query.trim().toLowerCase();
-  const status=$('#status-filter')?.value||'',priority=$('#priority-filter')?.value||'';
-  const rows=watches.filter(w=>[w.label,w.cedula,w.case_number,w.assigned_to].some(v=>String(v||'').toLowerCase().includes(q))).filter(w=>!status||trafficStatus(w)===status).filter(w=>!priority||w.priority===priority);
+  const status=$('#status-filter')?.value||'',priority=$('#priority-filter')?.value||'',emitted=$('#emitted-filter')?.value||'',deadline=$('#deadline-filter')?.value||'';
+  const matchesDeadline=info=>!deadline||(deadline==='expired'&&info?.days<0)||(deadline==='0-5'&&info?.days>=0&&info.days<=5)||(deadline==='6-10'&&info?.days>=6&&info.days<=10)||(deadline==='11-30'&&info?.days>=11&&info.days<=30)||(deadline==='31+'&&info?.days>=31);
+  const rows=watches.filter(w=>{const info=formalizationInfo(w.last_states),searchValues=[w.label,w.cedula,w.case_number,w.assigned_to,latestState(w.last_states),info?'emitido':'',info?.elapsed,info?.days];return searchValues.some(v=>String(v??'').toLowerCase().includes(q));}).filter(w=>!status||trafficStatus(w)===status).filter(w=>!priority||w.priority===priority).filter(w=>{const info=formalizationInfo(w.last_states);return(!emitted||(emitted==='yes'&&info)||(emitted==='no'&&!info))&&matchesDeadline(info);});
   $('#watch-list').innerHTML=rows.length?rows.map(w=>`<article class="watch-row ${trafficStatus(w)==='red'?'attention':trafficStatus(w)==='yellow'?'near-due':''}">
     <div class="watch-name"><div class="watch-icon">${escapeHtml((w.label||'E').slice(0,1).toUpperCase())}</div><div><strong><span class="traffic ${trafficStatus(w)}"></span>${escapeHtml(w.label||'Sin nombre')}</strong><small>Cédula ${escapeHtml(w.cedula)}</small><span class="priority">${escapeHtml(w.priority||'normal')} · ${escapeHtml(w.assigned_to||'Sin responsable')}</span></div></div>
     <div class="cell"><span class="cell-label">Caso BANHVI</span><strong>${w.case_number?`#${escapeHtml(w.case_number)}`:'Pendiente'}</strong></div>
@@ -192,7 +193,7 @@ async function showSession(session){ if(!session){loginView.classList.remove('hi
 
 $('#login-form').addEventListener('submit',signIn); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=loadData; $('#logout-btn').onclick=()=>client.auth.signOut(); $('#search').addEventListener('input',e=>renderWatches(e.target.value));
 $('#export-btn').onclick=exportExcel;
-$('#status-filter').onchange=()=>renderWatches($('#search').value);$('#priority-filter').onchange=()=>renderWatches($('#search').value);
+['#status-filter','#priority-filter','#emitted-filter','#deadline-filter'].forEach(selector=>$(selector).onchange=()=>renderWatches($('#search').value));
 $('#import-btn').onclick=()=>$('#import-file').click();$('#import-file').onchange=event=>{const file=event.target.files[0];if(file)importCsv(file);event.target.value='';};
 $('#save-management').onclick=saveManagement;$('#note-form').addEventListener('submit',addNote);$('#task-form').addEventListener('submit',addTask);$('#document-form').addEventListener('submit',uploadDocument);
 $('#open-client-preview').onclick=openClientPreview;$('#close-client-preview').onclick=closeClientPreview;
