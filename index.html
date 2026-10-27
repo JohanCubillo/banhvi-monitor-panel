@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b3b47">
+  <title>Monitor BANHVI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+  <main>
+    <section id="login-view" class="auth-shell">
+      <div class="auth-card">
+        <div class="mark" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+        <p class="eyebrow">SEGUIMIENTO DE EXPEDIENTES</p>
+        <h1>Monitor BANHVI</h1>
+        <p class="lead">Tus consultas, estados e historial en un solo lugar.</p>
+        <form id="login-form">
+          <label for="email">Correo autorizado</label>
+          <input id="email" type="email" autocomplete="email" placeholder="nombre@correo.com" required>
+          <button class="primary" type="submit">Recibir enlace de acceso <span>→</span></button>
+        </form>
+        <p id="login-message" class="message" role="status"></p>
+        <p class="fine">Acceso protegido con un enlace temporal enviado a tu correo.</p>
+      </div>
+    </section>
+
+    <section id="app-view" class="app-shell hidden">
+      <header class="topbar">
+        <div class="brand"><div class="mark small"><span></span><span></span><span></span><span></span></div><div><strong>Monitor BANHVI</strong><small>Panel de seguimiento</small></div></div>
+        <div class="top-actions"><span id="sync-status" class="sync"><i></i> Sincronizado</span><button id="refresh-btn" class="ghost">Actualizar</button><button id="logout-btn" class="ghost">Salir</button></div>
+      </header>
+
+      <div class="content">
+        <div class="welcome"><div><p class="eyebrow">RESUMEN GENERAL</p><h2>Buenos días, Johan</h2><p>Revisamos BANHVI cada 30 minutos, de 7:17 a. m. a 7:17 p. m.</p></div><button id="open-add" class="primary compact">+ Nuevo expediente</button></div>
+
+        <div class="metrics">
+          <article><span>Expedientes</span><strong id="metric-total">0</strong><small>registrados</small></article>
+          <article><span>Monitoreo activo</span><strong id="metric-active">0</strong><small>en seguimiento</small></article>
+          <article><span>Cambios detectados</span><strong id="metric-changes">0</strong><small>históricos</small></article>
+          <article><span>Requieren atención</span><strong id="metric-errors">0</strong><small>con error reciente</small></article>
+        </div>
+
+        <section class="panel">
+          <div class="panel-head"><div><h3>Expedientes monitoreados</h3><p>Estado más reciente de cada consulta.</p></div><div class="search-wrap"><input id="search" type="search" placeholder="Buscar por nombre, cédula o caso"></div></div>
+          <div id="watch-list" class="watch-list"><div class="empty">Cargando expedientes…</div></div>
+        </section>
+
+        <section class="panel timeline-panel">
+          <div class="panel-head"><div><h3>Actividad reciente</h3><p>Cambios y notificaciones registrados.</p></div></div>
+          <div id="activity-list" class="activity-list"><div class="empty">Sin actividad reciente.</div></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="add-dialog">
+    <form id="add-form" method="dialog">
+      <div class="dialog-head"><div><p class="eyebrow">NUEVO SEGUIMIENTO</p><h3>Agregar expediente</h3></div><button type="button" class="icon-btn" id="close-add" aria-label="Cerrar">×</button></div>
+      <label for="cedula">Número de cédula</label>
+      <input id="cedula" inputmode="numeric" pattern="[0-9]{9,12}" minlength="9" maxlength="12" placeholder="Ej. 113630495" required>
+      <label for="label">Nombre o referencia</label>
+      <input id="label" maxlength="120" placeholder="Ej. Familia Rodríguez" required>
+      <p class="form-note">La primera revisión guardará el estado inicial sin enviar una alerta.</p>
+      <p id="add-message" class="message" role="status"></p>
+      <div class="dialog-actions"><button type="button" class="ghost" id="cancel-add">Cancelar</button><button type="submit" class="primary">Guardar expediente</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="detail-dialog" class="detail-dialog">
+    <div class="dialog-head"><div><p class="eyebrow">DETALLE DEL EXPEDIENTE</p><h3 id="detail-title">Expediente</h3></div><button type="button" class="icon-btn" id="close-detail" aria-label="Cerrar">×</button></div>
+    <div id="detail-meta" class="detail-meta"></div>
+    <div id="state-list" class="state-list"></div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
+
