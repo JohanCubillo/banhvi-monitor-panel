@@ -1,6 +1,5 @@
 const SUPABASE_URL = 'https://vhdygrooeipxibnpofxf.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_I4uK-zm16tOepB_N2TzXqg_WlVd22QB';
-const ADMIN_EMAIL_SHA256 = '79889154e949530891ecb34df7e6b3b4f9acb51f43958bb4e86f9821260b4cc8';
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 const $ = (selector) => document.querySelector(selector);
@@ -12,6 +11,8 @@ let notes = [];
 let tasks = [];
 let documents = [];
 let currentWatchId = null;
+let currentOrganization = null;
+let currentMembership = null;
 
 function trafficStatus(watch){
   if(watch.last_error)return 'red';
@@ -31,7 +32,6 @@ function formatDate(value) {
   return new Intl.DateTimeFormat('es-CR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Costa_Rica' }).format(new Date(value));
 }
 function escapeHtml(value='') { const div=document.createElement('div'); div.textContent=String(value); return div.innerHTML; }
-async function isAdmin(email='') { const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(email.trim().toLowerCase())); return [...new Uint8Array(bytes)].map(b=>b.toString(16).padStart(2,'0')).join('')===ADMIN_EMAIL_SHA256; }
 function latestState(states) {
   if (!Array.isArray(states) || !states.length) return 'Pendiente de primera revisión';
   return [...states].sort((a,b) => { const [da,ma,ya]=a.date.split('/').map(Number),[db,mb,yb]=b.date.split('/').map(Number); return new Date(yb,mb-1,db)-new Date(ya,ma-1,da); })[0].description;
@@ -42,7 +42,6 @@ async function signIn(event) {
   event.preventDefault();
   const email = $('#email').value.trim().toLowerCase();
   const message = $('#login-message');
-  if (!await isAdmin(email)) { message.textContent='Este correo no está autorizado.'; message.className='message error'; return; }
   message.textContent='Enviando enlace seguro…'; message.className='message';
   const { error } = await client.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: true } });
   if (error) { message.textContent='No se pudo enviar el enlace. Intentá nuevamente.'; message.className='message error'; return; }
@@ -124,7 +123,8 @@ async function exportExcel(){
 async function addWatch(event){
   event.preventDefault(); const cedula=$('#cedula').value.trim(),label=$('#label').value.trim(),message=$('#add-message');
   if(!/^\d{9,12}$/.test(cedula)){message.textContent='Ingresá una cédula de 9 a 12 dígitos.';message.className='message error';return;}
-  const {error}=await client.from('monitor_watches').insert({cedula,label,enabled:true});
+  if(!currentOrganization){message.textContent='No hay una empresa activa para este usuario.';return;}
+  const {error}=await client.from('monitor_watches').insert({organization_id:currentOrganization.id,cedula,label,enabled:true});
   if(error){message.textContent=error.code==='23505'?'Esa cédula ya está registrada.':'No se pudo guardar el expediente.';message.className='message error';return;}
   $('#add-dialog').close(); $('#add-form').reset(); toast('Expediente agregado'); await loadData();
 }
@@ -179,17 +179,17 @@ async function importCsv(file){
   const text=await file.text(),lines=text.replace(/^\ufeff/,'').split(/\r?\n/).filter(Boolean);if(!lines.length)return;
   const delimiter=lines[0].includes(';')?';':',';const header=lines[0].split(delimiter).map(v=>v.trim().toLowerCase());const cIndex=header.findIndex(v=>v.includes('cedula')||v.includes('cédula')),lIndex=header.findIndex(v=>v.includes('nombre')||v.includes('referencia'));
   if(cIndex<0){toast('El CSV necesita una columna cédula');return;}const rows=lines.slice(1).map(line=>line.split(delimiter)).map(cols=>({cedula:(cols[cIndex]||'').replace(/\D/g,''),label:(cols[lIndex]||'Expediente importado').trim(),enabled:true})).filter(r=>/^\d{9,12}$/.test(r.cedula));if(!rows.length){toast('No se encontraron cédulas válidas');return;}
-  const {error}=await client.from('monitor_watches').upsert(rows,{onConflict:'cedula',ignoreDuplicates:true});if(error){toast('No se pudo importar el archivo');return;}toast(`${rows.length} filas procesadas`);await loadData();
+  if(!currentOrganization){toast('No hay una empresa activa');return;}rows.forEach(row=>row.organization_id=currentOrganization.id);const {error}=await client.from('monitor_watches').upsert(rows,{onConflict:'organization_id,cedula',ignoreDuplicates:true});if(error){toast('No se pudo importar el archivo');return;}toast(`${rows.length} filas procesadas`);await loadData();
 }
 
 async function searchClientCase(event){
   event.preventDefault();const cedula=$('#client-cedula').value.replace(/\D/g,''),caseNumber=$('#client-case').value.replace(/\D/g,''),message=$('#client-search-message');message.textContent='Consultando…';
-  const {data,error}=await client.rpc('lookup_client_case',{p_cedula:cedula,p_case_number:caseNumber});if(error||!data){message.textContent='No encontramos un expediente habilitado con esos datos.';message.className='message error';return;}
+  const portalValue=new URLSearchParams(location.search).get('cliente'),orgSlug=portalValue&&portalValue!=='1'?portalValue:null;const {data,error}=await client.rpc('lookup_client_case',{p_cedula:cedula,p_case_number:caseNumber,p_org_slug:orgSlug});if(error||!data){message.textContent='No encontramos un expediente habilitado con esos datos.';message.className='message error';return;}
   message.textContent='';message.className='message';$('#client-search-panel').classList.add('hidden');$('#client-result').classList.remove('hidden');$('#public-client-title').textContent=data.label||'Su expediente';$('#public-client-updated').textContent=`Última actualización: ${formatDate(data.last_success_at)}`;$('#public-client-status').innerHTML=escapeHtml(latestState(data.last_states));
   const states=Array.isArray(data.last_states)?[...data.last_states].reverse():[];$('#public-client-states').innerHTML=states.length?states.map(s=>`<div class="state"><time>${escapeHtml(s.date)}</time><strong>${escapeHtml(s.description)}</strong></div>`).join(''):'<div class="empty">Aún no hay estados disponibles.</div>';$('#public-client-notes').innerHTML=(data.notes||[]).length?data.notes.map(n=>`<div class="mini-item"><p>${escapeHtml(n.body)}</p><small>${formatDate(n.created_at)}</small></div>`).join(''):'<div class="empty">No hay información adicional compartida.</div>';$('#public-client-documents').innerHTML=(data.documents||[]).length?data.documents.map(d=>`<div class="mini-item"><strong>${escapeHtml(d.name)}</strong></div>`).join(''):'<div class="empty">No hay documentos compartidos.</div>';
 }
 
-async function showSession(session){ if(!session){loginView.classList.remove('hidden');appView.classList.add('hidden');return;}if(!await isAdmin(session.user.email)){await client.auth.signOut();$('#login-message').textContent='Este usuario no está autorizado.';return;}loginView.classList.add('hidden');appView.classList.remove('hidden');await loadData();}
+async function showSession(session){if(!session){currentOrganization=null;currentMembership=null;loginView.classList.remove('hidden');appView.classList.add('hidden');return;}const email=session.user.email.toLowerCase();const membershipResult=await client.from('monitor_organization_members').select('organization_id,display_name,role').eq('email',email).eq('active',true).limit(1).maybeSingle();if(membershipResult.error||!membershipResult.data){await client.auth.signOut();$('#login-message').textContent='Este correo todavía no pertenece a una empresa activa.';$('#login-message').className='message error';return;}const organizationResult=await client.from('monitor_organizations').select('*').eq('id',membershipResult.data.organization_id).eq('active',true).single();if(organizationResult.error){await client.auth.signOut();$('#login-message').textContent='No fue posible abrir la empresa asignada.';return;}currentMembership=membershipResult.data;currentOrganization=organizationResult.data;$('#organization-name').textContent=currentOrganization.name;$('#organization-plan').textContent=`Plan ${currentOrganization.plan} · hasta ${currentOrganization.max_cases} expedientes`;$('#user-greeting').textContent=`Buenos días, ${currentMembership.display_name}`;loginView.classList.add('hidden');appView.classList.remove('hidden');await loadData();}
 
 $('#login-form').addEventListener('submit',signIn); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=loadData; $('#logout-btn').onclick=()=>client.auth.signOut(); $('#search').addEventListener('input',e=>renderWatches(e.target.value));
 $('#export-btn').onclick=exportExcel;
@@ -197,7 +197,7 @@ $('#export-btn').onclick=exportExcel;
 $('#import-btn').onclick=()=>$('#import-file').click();$('#import-file').onchange=event=>{const file=event.target.files[0];if(file)importCsv(file);event.target.value='';};
 $('#save-management').onclick=saveManagement;$('#note-form').addEventListener('submit',addNote);$('#task-form').addEventListener('submit',addTask);$('#document-form').addEventListener('submit',uploadDocument);
 $('#open-client-preview').onclick=openClientPreview;$('#close-client-preview').onclick=closeClientPreview;
-const clientMode=new URLSearchParams(location.search).get('cliente')==='1';
+const clientMode=Boolean(new URLSearchParams(location.search).get('cliente'));
 if(clientMode){loginView.classList.add('hidden');appView.classList.add('hidden');$('#client-public-view').classList.remove('hidden');$('#client-search-form').addEventListener('submit',searchClientCase);$('#client-new-search').onclick=()=>{$('#client-result').classList.add('hidden');$('#client-search-panel').classList.remove('hidden');$('#client-search-form').reset();};}
 else{client.auth.onAuthStateChange((_event,session)=>setTimeout(()=>showSession(session),0));client.auth.getSession().then(({data})=>showSession(data.session));}
 
