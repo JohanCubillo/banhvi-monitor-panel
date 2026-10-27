@@ -89,17 +89,19 @@
     </div>
   </dialog>
 
-  <dialog id="client-preview-dialog" class="client-preview-dialog">
-    <div class="client-preview-top"><div class="brand"><div class="mark small"><span></span><span></span><span></span><span></span></div><div><strong>Seguimiento BANHVI</strong><small>Portal del cliente</small></div></div><button type="button" class="icon-btn" id="close-client-preview" aria-label="Cerrar">×</button></div>
-    <div class="client-hero"><p class="eyebrow">ESTADO DE SU SOLICITUD</p><h3 id="client-preview-title">Expediente</h3><p id="client-preview-updated"></p><div id="client-preview-status" class="client-status"></div></div>
-    <section class="client-section"><h4>Historial del trámite</h4><div id="client-preview-states" class="state-list"></div></section>
-    <section class="client-section"><h4>Información compartida</h4><div id="client-preview-notes" class="mini-list"></div></section>
-    <section class="client-section"><h4>Documentos disponibles</h4><div id="client-preview-documents" class="mini-list"></div></section>
-    <p class="client-help">Esta es una vista previa. El cliente solamente verá la información que usted haya marcado como visible.</p>
-  </dialog>
+  <div id="client-preview-dialog" class="client-preview-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="client-preview-title">
+    <div class="client-preview-dialog">
+      <div class="client-preview-top"><div class="brand"><div class="mark small"><span></span><span></span><span></span><span></span></div><div><strong>Seguimiento BANHVI</strong><small>Portal del cliente</small></div></div><button type="button" class="icon-btn" id="close-client-preview" aria-label="Cerrar">×</button></div>
+      <div class="client-hero"><p class="eyebrow">ESTADO DE SU SOLICITUD</p><h3 id="client-preview-title">Expediente</h3><p id="client-preview-updated"></p><div id="client-preview-status" class="client-status"></div></div>
+      <section class="client-section"><h4>Historial del trámite</h4><div id="client-preview-states" class="state-list"></div></section>
+      <section class="client-section"><h4>Información compartida</h4><div id="client-preview-notes" class="mini-list"></div></section>
+      <section class="client-section"><h4>Documentos disponibles</h4><div id="client-preview-documents" class="mini-list"></div></section>
+      <p class="client-help">Esta es una vista previa. El cliente solamente verá la información que usted haya marcado como visible.</p>
+    </div>
+  </div>
 
   <div id="toast" class="toast" role="status"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=20261027-2"></script>
 </body>
 </html>
