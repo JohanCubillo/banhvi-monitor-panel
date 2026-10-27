@@ -140,6 +140,18 @@ function renderCaseManagement(){
   document.querySelectorAll('[data-task]').forEach(el=>el.onchange=()=>toggleTask(el.dataset.task,el.checked));
 }
 
+function openClientPreview(){
+  const w=watches.find(x=>x.id===currentWatchId);if(!w)return;
+  const sharedNotes=notes.filter(n=>n.watch_id===w.id&&n.client_visible),sharedDocs=documents.filter(d=>d.watch_id===w.id&&d.client_visible),states=Array.isArray(w.last_states)?[...w.last_states].reverse():[];
+  $('#client-preview-title').textContent=w.label||'Su expediente';
+  $('#client-preview-updated').textContent=`Última actualización: ${formatDate(w.last_success_at)}`;
+  $('#client-preview-status').innerHTML=`<span class="traffic ${trafficStatus(w)}"></span>${escapeHtml(latestState(w.last_states))}`;
+  $('#client-preview-states').innerHTML=states.length?states.map(s=>`<div class="state"><time>${escapeHtml(s.date)}</time><strong>${escapeHtml(s.description)}</strong></div>`).join(''):'<div class="empty">Aún no hay estados disponibles.</div>';
+  $('#client-preview-notes').innerHTML=sharedNotes.length?sharedNotes.map(n=>`<div class="mini-item"><p>${escapeHtml(n.body)}</p><small>${formatDate(n.created_at)}</small></div>`).join(''):'<div class="empty">No hay información adicional compartida.</div>';
+  $('#client-preview-documents').innerHTML=sharedDocs.length?sharedDocs.map(d=>`<div class="mini-item"><strong>${escapeHtml(d.name)}</strong><br><small>Documento disponible para el cliente</small></div>`).join(''):'<div class="empty">No hay documentos compartidos.</div>';
+  $('#client-preview-dialog').showModal();
+}
+
 async function saveManagement(){
   if(!currentWatchId)return;const patch={priority:$('#detail-priority').value,assigned_to:$('#detail-assigned').value.trim()||null,due_at:$('#detail-due').value?new Date($('#detail-due').value).toISOString():null,client_email:$('#detail-client-email').value.trim().toLowerCase()||null,client_portal_enabled:$('#detail-client-portal').checked};
   const {error}=await client.from('monitor_watches').update(patch).eq('id',currentWatchId);if(error){toast('No se pudo guardar la gestión');return;}toast('Gestión actualizada');await loadData();
@@ -163,5 +175,6 @@ $('#export-btn').onclick=exportExcel;
 $('#status-filter').onchange=()=>renderWatches($('#search').value);$('#priority-filter').onchange=()=>renderWatches($('#search').value);
 $('#import-btn').onclick=()=>$('#import-file').click();$('#import-file').onchange=event=>{const file=event.target.files[0];if(file)importCsv(file);event.target.value='';};
 $('#save-management').onclick=saveManagement;$('#note-form').addEventListener('submit',addNote);$('#task-form').addEventListener('submit',addTask);$('#document-form').addEventListener('submit',uploadDocument);
+$('#open-client-preview').onclick=openClientPreview;$('#close-client-preview').onclick=()=>$('#client-preview-dialog').close();
 client.auth.onAuthStateChange((_event,session)=>setTimeout(()=>showSession(session),0));
 client.auth.getSession().then(({data})=>showSession(data.session));
