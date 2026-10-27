@@ -38,12 +38,12 @@
 
     <section id="app-view" class="app-shell hidden">
       <header class="topbar">
-        <div class="brand"><div class="mark small"><span></span><span></span><span></span><span></span></div><div><strong>Monitor BANHVI</strong><small>Panel de seguimiento</small></div></div>
+        <div class="brand"><div class="mark small"><span></span><span></span><span></span><span></span></div><div><strong id="organization-name">Monitor BANHVI</strong><small id="organization-plan">Panel de seguimiento</small></div></div>
         <div class="top-actions"><span id="sync-status" class="sync"><i></i> Sincronizado</span><button id="refresh-btn" class="ghost">Actualizar</button><button id="logout-btn" class="ghost">Salir</button></div>
       </header>
 
       <div class="content">
-        <div class="welcome"><div><p class="eyebrow">RESUMEN GENERAL</p><h2>Buenos días, Johan</h2><p>Revisamos BANHVI cada 30 minutos, de 7:17 a. m. a 7:17 p. m.</p></div><div class="welcome-actions"><button id="import-btn" class="ghost">Importar CSV</button><button id="export-btn" class="ghost">Exportar a Excel</button><button id="open-add" class="primary compact">+ Nuevo expediente</button><input id="import-file" type="file" accept=".csv,text/csv" hidden></div></div>
+        <div class="welcome"><div><p class="eyebrow">RESUMEN GENERAL</p><h2 id="user-greeting">Buenos días</h2><p>Revisamos BANHVI cada 30 minutos, de 7:17 a. m. a 7:17 p. m.</p></div><div class="welcome-actions"><button id="import-btn" class="ghost">Importar CSV</button><button id="export-btn" class="ghost">Exportar a Excel</button><button id="open-add" class="primary compact">+ Nuevo expediente</button><input id="import-file" type="file" accept=".csv,text/csv" hidden></div></div>
 
         <div class="metrics">
           <article><span>Expedientes</span><strong id="metric-total">0</strong><small>registrados</small></article>
