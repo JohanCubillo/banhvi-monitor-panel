@@ -149,13 +149,13 @@ function openClientPreview(){
   $('#client-preview-states').innerHTML=states.length?states.map(s=>`<div class="state"><time>${escapeHtml(s.date)}</time><strong>${escapeHtml(s.description)}</strong></div>`).join(''):'<div class="empty">Aún no hay estados disponibles.</div>';
   $('#client-preview-notes').innerHTML=sharedNotes.length?sharedNotes.map(n=>`<div class="mini-item"><p>${escapeHtml(n.body)}</p><small>${formatDate(n.created_at)}</small></div>`).join(''):'<div class="empty">No hay información adicional compartida.</div>';
   $('#client-preview-documents').innerHTML=sharedDocs.length?sharedDocs.map(d=>`<div class="mini-item"><strong>${escapeHtml(d.name)}</strong><br><small>Documento disponible para el cliente</small></div>`).join(''):'<div class="empty">No hay documentos compartidos.</div>';
-  $('#detail-dialog').close();
-  requestAnimationFrame(()=>$('#client-preview-dialog').showModal());
+  $('#client-preview-dialog').classList.remove('hidden');
+  document.body.style.overflow='hidden';
 }
 
 function closeClientPreview(){
-  $('#client-preview-dialog').close();
-  if(currentWatchId)requestAnimationFrame(()=>openDetail(currentWatchId));
+  $('#client-preview-dialog').classList.add('hidden');
+  document.body.style.overflow='';
 }
 
 async function saveManagement(){
