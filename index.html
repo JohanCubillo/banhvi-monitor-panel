@@ -53,7 +53,7 @@
         </div>
 
         <section class="panel">
-          <div class="panel-head"><div><h3>Expedientes monitoreados</h3><p>Estado más reciente de cada consulta.</p></div><div class="filters"><div class="search-wrap"><input id="search" type="search" placeholder="Buscar por nombre, cédula o caso"></div><select id="status-filter" aria-label="Filtrar por semáforo"><option value="">Todos</option><option value="red">Requieren atención</option><option value="yellow">Próximos a vencer</option><option value="green">Al día</option></select><select id="priority-filter" aria-label="Filtrar por prioridad"><option value="">Toda prioridad</option><option value="urgent">Urgente</option><option value="high">Alta</option><option value="normal">Normal</option><option value="low">Baja</option></select></div></div>
+          <div class="panel-head"><div><h3>Expedientes monitoreados</h3><p>Estado más reciente de cada consulta.</p></div><div class="filters"><div class="search-wrap"><input id="search" type="search" placeholder="Buscar nombre, cédula, caso o EMITIDO"></div><select id="emitted-filter" aria-label="Filtrar por estado emitido"><option value="">Todos los expedientes</option><option value="yes">Con EMITIDO</option><option value="no">Sin EMITIDO</option></select><select id="deadline-filter" aria-label="Filtrar por días restantes"><option value="">Cualquier plazo</option><option value="expired">Plazo vencido</option><option value="0-5">Faltan 0–5 días</option><option value="6-10">Faltan 6–10 días</option><option value="11-30">Faltan 11–30 días</option><option value="31+">Faltan más de 30 días</option></select><select id="priority-filter" aria-label="Filtrar por prioridad"><option value="">Toda prioridad</option><option value="urgent">Urgente</option><option value="high">Alta</option><option value="normal">Normal</option><option value="low">Baja</option></select><select id="status-filter" aria-label="Filtrar por semáforo"><option value="">Cualquier atención</option><option value="red">Requieren atención</option><option value="yellow">Próximos a vencer</option><option value="green">Al día</option></select></div></div>
           <div id="watch-list" class="watch-list"><div class="empty">Cargando expedientes…</div></div>
         </section>
 
@@ -112,3 +112,4 @@
   <script src="app.js?v=20261027-3"></script>
 </body>
 </html>
+
