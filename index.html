@@ -36,7 +36,7 @@
       </header>
 
       <div class="content">
-        <div class="welcome"><div><p class="eyebrow">RESUMEN GENERAL</p><h2>Buenos días, Johan</h2><p>Revisamos BANHVI cada 30 minutos, de 7:17 a. m. a 7:17 p. m.</p></div><button id="open-add" class="primary compact">+ Nuevo expediente</button></div>
+        <div class="welcome"><div><p class="eyebrow">RESUMEN GENERAL</p><h2>Buenos días, Johan</h2><p>Revisamos BANHVI cada 30 minutos, de 7:17 a. m. a 7:17 p. m.</p></div><div class="welcome-actions"><button id="export-btn" class="ghost">Exportar a Excel</button><button id="open-add" class="primary compact">+ Nuevo expediente</button></div></div>
 
         <div class="metrics">
           <article><span>Expedientes</span><strong id="metric-total">0</strong><small>registrados</small></article>
@@ -78,6 +78,7 @@
   </dialog>
 
   <div id="toast" class="toast" role="status"></div>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
   <script src="app.js"></script>
 </body>
