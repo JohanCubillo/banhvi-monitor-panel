@@ -126,7 +126,8 @@
       <h4>Gestión interna</h4>
       <div class="management-grid"><label>Prioridad<select id="detail-priority"><option value="low">Baja</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label><label>Responsable<input id="detail-assigned" placeholder="Nombre o correo"></label><label>Fecha límite<input id="detail-due" type="datetime-local"></label><label>Correo del cliente<input id="detail-client-email" type="email" placeholder="cliente@correo.com"></label></div>
       <label class="check-row"><input id="detail-client-portal" type="checkbox"> Permitir acceso al cliente cuando se habilite el portal</label>
-      <button id="save-management" type="button" class="primary compact">Guardar gestión</button>
+      <div class="management-actions"><button id="save-management" type="button" class="primary compact">Guardar gestión</button><button id="send-client-access" type="button" class="ghost">Enviar acceso al cliente</button></div>
+      <p id="client-access-message" class="message" role="status"></p>
       <div class="detail-columns">
         <section><h4>Notas</h4><form id="note-form"><textarea id="note-body" maxlength="4000" placeholder="Agregar una nota…" required></textarea><label class="check-row"><input id="note-visible" type="checkbox"> Visible para el cliente</label><button class="ghost" type="submit">Agregar nota</button></form><div id="note-list" class="mini-list"></div></section>
         <section><h4>Tareas</h4><form id="task-form"><input id="task-title" maxlength="240" placeholder="Próxima acción" required><input id="task-due" type="datetime-local"><button class="ghost" type="submit">Crear tarea</button></form><div id="task-list" class="mini-list"></div></section>
@@ -148,7 +149,7 @@
 
   <div id="toast" class="toast" role="status"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="app.js?v=20261027-5"></script>
+  <script src="app.js?v=20261027-6"></script>
 </body>
 </html>
 
