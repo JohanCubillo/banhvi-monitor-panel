@@ -13,6 +13,10 @@ let documents = [];
 let currentWatchId = null;
 let currentOrganization = null;
 let currentMembership = null;
+let consents = [];
+let privacyRequests = [];
+let auditEvents = [];
+let verifiedClientCase = null;
 
 function trafficStatus(watch){
   if(watch.last_error)return 'red';
@@ -90,6 +94,14 @@ async function loadData() {
     client.from('monitor_documents').select('*').order('created_at',{ascending:false})
   ]);
   notes=noteResult.data||[];tasks=taskResult.data||[];documents=documentResult.data||[];
+  if(['owner','admin'].includes(currentMembership?.role)){
+    const [consentResult,requestResult,auditResult]=await Promise.all([
+      client.from('monitor_client_consents').select('id,accepted_at,withdrawn_at'),
+      client.from('monitor_privacy_requests').select('*').order('created_at',{ascending:false}),
+      client.from('monitor_audit_log').select('id,action,entity_type,created_at').order('created_at',{ascending:false}).limit(1000)
+    ]);
+    consents=consentResult.data||[];privacyRequests=requestResult.data||[];auditEvents=auditResult.data||[];
+  }
   render();
   $('#sync-status').innerHTML='<i></i> Sincronizado';
 }
@@ -101,6 +113,17 @@ function render() {
   $('#metric-errors').textContent=watches.filter(w=>trafficStatus(w)==='red').length;
   renderWatches($('#search').value);
   renderActivity();
+  renderCompliance();
+}
+
+function renderCompliance(){
+  const panel=$('#compliance-panel');if(!panel)return;
+  const allowed=['owner','admin'].includes(currentMembership?.role);panel.classList.toggle('hidden',!allowed);if(!allowed)return;
+  $('#metric-consents').textContent=consents.filter(c=>!c.withdrawn_at).length;
+  $('#metric-privacy-requests').textContent=privacyRequests.filter(r=>['received','in_review'].includes(r.status)).length;
+  $('#metric-audit').textContent=auditEvents.length;
+  const pending=privacyRequests.filter(r=>['received','in_review'].includes(r.status));
+  $('#privacy-request-list').innerHTML=pending.length?pending.map(r=>`<div class="activity"><span class="activity-dot"></span><div><p><strong>${escapeHtml(r.request_type)}</strong> · ${escapeHtml(r.email)}</p><small>${escapeHtml(r.details||'Sin detalle')}</small></div><small>${escapeHtml(formatDate(r.created_at))}</small></div>`).join(''):'<div class="empty">Sin solicitudes pendientes.</div>';
 }
 
 function renderWatches(query='') {
@@ -131,6 +154,7 @@ function stateDifference(before=[], after=[]) {
 
 async function exportExcel(){
   if(!watches.length){toast('No hay expedientes para exportar');return;}
+  if(!['owner','admin'].includes(currentMembership?.role)){toast('Tu rol no permite exportar datos');return;}
   const button=$('#export-btn');button.disabled=true;button.textContent='Preparando Excel…';
   try{
     const xml=value=>String(value??'').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c]));
@@ -143,7 +167,7 @@ async function exportExcel(){
     const changeRows=events.map(e=>{const w=watches.find(x=>x.id===e.watch_id)||{},diff=stateDifference(e.before_states,e.after_states);return{label:w.label||'',cedula:w.cedula||'',case:w.case_number||'',created:formatDate(e.created_at),status:e.status==='sent'?'Enviada':e.status==='review_required'?'Requiere revisión':'Pendiente',sent:e.sent_at?formatDate(e.sent_at):'',added:diff.added,removed:diff.removed};});
     const workbook=`<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#0B3B47" ss:Pattern="Solid"/></Style></Styles>${sheet('Expedientes',summaryHeaders,summaryRows)}${sheet('Estados',stateHeaders,stateRows)}${sheet('Cambios',changeHeaders,changeRows)}</Workbook>`;
     const url=URL.createObjectURL(new Blob(['\ufeff',workbook],{type:'application/vnd.ms-excel'}));
-    const link=document.createElement('a');link.href=url;link.download=`monitor-banhvi-${new Date().toISOString().slice(0,10)}.xls`;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);toast('Excel descargado');
+    const link=document.createElement('a');link.href=url;link.download=`monitor-banhvi-${new Date().toISOString().slice(0,10)}.xls`;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);await client.rpc('record_admin_event',{p_organization_id:currentOrganization.id,p_action:'export_excel',p_details:{records:watches.length}});toast('Excel descargado');
   }catch(error){console.error(error);toast('No fue posible generar el Excel');}
   finally{button.disabled=false;button.textContent='Exportar a Excel';}
 }
@@ -211,13 +235,32 @@ async function importCsv(file){
 }
 
 async function searchClientCase(event){
-  event.preventDefault();const cedula=$('#client-cedula').value.replace(/\D/g,''),caseNumber=$('#client-case').value.replace(/\D/g,''),message=$('#client-search-message');message.textContent='Consultando…';
-  const portalValue=new URLSearchParams(location.search).get('cliente'),orgSlug=portalValue&&portalValue!=='1'?portalValue:null;const {data,error}=await client.rpc('lookup_client_case',{p_cedula:cedula,p_case_number:caseNumber,p_org_slug:orgSlug});if(error||!data){message.textContent='No encontramos un expediente habilitado con esos datos.';message.className='message error';return;}
+  event?.preventDefault();const email=$('#client-email').value.trim().toLowerCase(),cedula=$('#client-cedula').value.replace(/\D/g,''),caseNumber=$('#client-case').value.replace(/\D/g,''),message=$('#client-search-message');
+  const {data:{session}}=await client.auth.getSession();
+  if(!session){
+    if(!$('#client-consent').checked){message.textContent='Debe aceptar el aviso de privacidad para continuar.';message.className='message error';return;}
+    const pending={email,cedula,caseNumber,consent:true};localStorage.setItem('banhvi-client-pending',JSON.stringify(pending));message.textContent='Enviando enlace de verificación…';message.className='message';
+    const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:location.href,shouldCreateUser:true}});
+    if(error){message.textContent='No fue posible enviar el enlace de verificación.';message.className='message error';return;}
+    message.textContent='Revisá tu correo y abrí el enlace. Después mostraremos únicamente tu expediente.';return;
+  }
+  if(session.user.email?.toLowerCase()!==email){await client.auth.signOut();message.textContent='El correo verificado no coincide. Volvé a intentarlo.';message.className='message error';return;}
+  message.textContent='Consultando…';message.className='message';
+  const portalValue=new URLSearchParams(location.search).get('cliente'),orgSlug=portalValue&&portalValue!=='1'?portalValue:null;const {data,error}=await client.rpc('lookup_client_case',{p_cedula:cedula,p_case_number:caseNumber,p_org_slug:orgSlug});if(error||!data){message.textContent='No encontramos un expediente habilitado para ese correo y esos datos.';message.className='message error';return;}
+  const consentResult=await client.rpc('record_client_consent',{p_watch_id:data.watch_id,p_policy_version:data.policy_version,p_user_agent:navigator.userAgent});if(consentResult.error){message.textContent='No fue posible registrar el consentimiento.';message.className='message error';return;}
+  verifiedClientCase=data;localStorage.removeItem('banhvi-client-pending');
   message.textContent='';message.className='message';$('#client-search-panel').classList.add('hidden');$('#client-result').classList.remove('hidden');$('#public-client-title').textContent=data.label||'Su expediente';$('#public-client-updated').textContent=`Última actualización: ${formatDate(data.last_success_at)}`;$('#public-client-status').innerHTML=escapeHtml(latestState(data.last_states));
   const states=Array.isArray(data.last_states)?[...data.last_states].reverse():[];$('#public-client-states').innerHTML=states.length?states.map(s=>`<div class="state"><time>${escapeHtml(s.date)}</time><strong>${escapeHtml(s.description)}</strong></div>`).join(''):'<div class="empty">Aún no hay estados disponibles.</div>';$('#public-client-notes').innerHTML=(data.notes||[]).length?data.notes.map(n=>`<div class="mini-item"><p>${escapeHtml(n.body)}</p><small>${formatDate(n.created_at)}</small></div>`).join(''):'<div class="empty">No hay información adicional compartida.</div>';$('#public-client-documents').innerHTML=(data.documents||[]).length?data.documents.map(d=>`<div class="mini-item"><strong>${escapeHtml(d.name)}</strong></div>`).join(''):'<div class="empty">No hay documentos compartidos.</div>';
 }
 
-async function showSession(session){if(!session){currentOrganization=null;currentMembership=null;loginView.classList.remove('hidden');appView.classList.add('hidden');return;}const email=session.user.email.toLowerCase();const membershipResult=await client.from('monitor_organization_members').select('organization_id,display_name,role').eq('email',email).eq('active',true).limit(1).maybeSingle();if(membershipResult.error||!membershipResult.data){await client.auth.signOut();$('#login-message').textContent='Este correo todavía no pertenece a una empresa activa.';$('#login-message').className='message error';return;}const organizationResult=await client.from('monitor_organizations').select('*').eq('id',membershipResult.data.organization_id).eq('active',true).single();if(organizationResult.error){await client.auth.signOut();$('#login-message').textContent='No fue posible abrir la empresa asignada.';return;}currentMembership=membershipResult.data;currentOrganization=organizationResult.data;$('#organization-name').textContent=currentOrganization.name;$('#organization-plan').textContent=`Plan ${currentOrganization.plan} · hasta ${currentOrganization.max_cases} expedientes`;$('#user-greeting').textContent=`Buenos días, ${currentMembership.display_name}`;loginView.classList.add('hidden');appView.classList.remove('hidden');await loadData();}
+async function submitPrivacyRequest(event){
+  event.preventDefault();const message=$('#rights-message'),portalValue=new URLSearchParams(location.search).get('cliente'),orgSlug=verifiedClientCase?.organization_slug||(portalValue&&portalValue!=='1'?portalValue:null);
+  const {data:{session}}=await client.auth.getSession();if(!session||!orgSlug){message.textContent='Primero verificá tu correo consultando el expediente.';message.className='message error';return;}
+  message.textContent='Enviando…';message.className='message';const {error}=await client.rpc('submit_privacy_request',{p_org_slug:orgSlug,p_request_type:$('#rights-type').value,p_details:$('#rights-details').value.trim()});
+  if(error){message.textContent='No fue posible registrar la solicitud.';message.className='message error';return;}message.textContent='Solicitud recibida. Conservá este mensaje como confirmación.';event.target.reset();
+}
+
+async function showSession(session){if(!session){currentOrganization=null;currentMembership=null;loginView.classList.remove('hidden');appView.classList.add('hidden');return;}const email=session.user.email.toLowerCase();const membershipResult=await client.from('monitor_organization_members').select('organization_id,display_name,role').eq('email',email).eq('active',true).limit(1).maybeSingle();if(membershipResult.error||!membershipResult.data){await client.auth.signOut();$('#login-message').textContent='Este correo todavía no pertenece a una empresa activa.';$('#login-message').className='message error';return;}const organizationResult=await client.from('monitor_organizations').select('*').eq('id',membershipResult.data.organization_id).eq('active',true).single();if(organizationResult.error){await client.auth.signOut();$('#login-message').textContent='No fue posible abrir la empresa asignada.';return;}currentMembership=membershipResult.data;currentOrganization=organizationResult.data;const isManager=['owner','admin'].includes(currentMembership.role),canEdit=isManager||currentMembership.role==='agent';$('#organization-name').textContent=currentOrganization.name;$('#organization-plan').textContent=`Plan ${currentOrganization.plan} · ${currentMembership.role} · hasta ${currentOrganization.max_cases} expedientes`;$('#user-greeting').textContent=`Buenos días, ${currentMembership.display_name}`;$('#export-btn').classList.toggle('hidden',!isManager);$('#import-btn').classList.toggle('hidden',!isManager);$('#open-add').classList.toggle('hidden',!canEdit);loginView.classList.add('hidden');appView.classList.remove('hidden');await loadData();}
 
 $('#login-form').addEventListener('submit',signIn);$('#reset-password-btn').onclick=requestPasswordReset;$('#magic-link-btn').onclick=requestMagicLink;$('#password-form').addEventListener('submit',saveNewPassword); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=loadData; $('#logout-btn').onclick=()=>client.auth.signOut(); $('#search').addEventListener('input',e=>renderWatches(e.target.value));
 $('#export-btn').onclick=exportExcel;
@@ -226,6 +269,6 @@ $('#import-btn').onclick=()=>$('#import-file').click();$('#import-file').onchang
 $('#save-management').onclick=saveManagement;$('#note-form').addEventListener('submit',addNote);$('#task-form').addEventListener('submit',addTask);$('#document-form').addEventListener('submit',uploadDocument);
 $('#open-client-preview').onclick=openClientPreview;$('#close-client-preview').onclick=closeClientPreview;
 const clientMode=Boolean(new URLSearchParams(location.search).get('cliente'));
-if(clientMode){loginView.classList.add('hidden');appView.classList.add('hidden');$('#client-public-view').classList.remove('hidden');$('#client-search-form').addEventListener('submit',searchClientCase);$('#client-new-search').onclick=()=>{$('#client-result').classList.add('hidden');$('#client-search-panel').classList.remove('hidden');$('#client-search-form').reset();};}
+if(clientMode){loginView.classList.add('hidden');appView.classList.add('hidden');$('#client-public-view').classList.remove('hidden');$('#client-search-form').addEventListener('submit',searchClientCase);$('#open-privacy').onclick=()=>$('#privacy-dialog').showModal();$('#close-privacy').onclick=()=>$('#privacy-dialog').close();$('#open-rights').onclick=()=>$('#rights-dialog').showModal();$('#close-rights').onclick=()=>$('#rights-dialog').close();$('#rights-form').addEventListener('submit',submitPrivacyRequest);$('#client-new-search').onclick=async()=>{$('#client-result').classList.add('hidden');$('#client-search-panel').classList.remove('hidden');$('#client-search-form').reset();verifiedClientCase=null;await client.auth.signOut();};const pending=JSON.parse(localStorage.getItem('banhvi-client-pending')||'null');if(pending){$('#client-email').value=pending.email;$('#client-cedula').value=pending.cedula;$('#client-case').value=pending.caseNumber;$('#client-consent').checked=!!pending.consent;}client.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_IN'&&session&&pending)setTimeout(()=>searchClientCase(),0);});client.auth.getSession().then(({data})=>{if(data.session&&pending)searchClientCase();});}
 else{client.auth.onAuthStateChange((event,session)=>{if(event==='PASSWORD_RECOVERY'){setTimeout(()=>$('#password-dialog').showModal(),0);return;}setTimeout(()=>showSession(session),0);});client.auth.getSession().then(({data})=>showSession(data.session));}
 
