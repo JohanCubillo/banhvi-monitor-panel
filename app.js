@@ -41,11 +41,39 @@ function toast(text){ const el=$('#toast'); el.textContent=text; el.classList.ad
 async function signIn(event) {
   event.preventDefault();
   const email = $('#email').value.trim().toLowerCase();
+  const password = $('#password').value;
   const message = $('#login-message');
-  message.textContent='Enviando enlace seguro…'; message.className='message';
-  const { error } = await client.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: true } });
-  if (error) { message.textContent='No se pudo enviar el enlace. Intentá nuevamente.'; message.className='message error'; return; }
-  message.textContent='Listo. Revisá tu correo y abrí el enlace de acceso.';
+  message.textContent='Verificando acceso…'; message.className='message';
+  const { error } = await client.auth.signInWithPassword({ email, password });
+  if (error) { message.textContent='Correo o contraseña incorrectos. Podés recuperar tu contraseña abajo.'; message.className='message error'; return; }
+  message.textContent='Acceso correcto.';
+}
+
+function loginEmail(){return $('#email').value.trim().toLowerCase();}
+function redirectUrl(){return `${location.origin}${location.pathname}`;}
+async function requestPasswordReset(){
+  const email=loginEmail(),message=$('#login-message');
+  if(!email){message.textContent='Primero escribí tu correo autorizado.';message.className='message error';$('#email').focus();return;}
+  message.textContent='Enviando instrucciones…';message.className='message';
+  const {error}=await client.auth.resetPasswordForEmail(email,{redirectTo:redirectUrl()});
+  if(error){message.textContent='No fue posible enviar el correo. Intentá nuevamente.';message.className='message error';return;}
+  message.textContent='Si el correo está autorizado, recibirás un enlace para crear o cambiar tu contraseña.';
+}
+async function requestMagicLink(){
+  const email=loginEmail(),message=$('#login-message');
+  if(!email){message.textContent='Primero escribí tu correo autorizado.';message.className='message error';$('#email').focus();return;}
+  message.textContent='Enviando enlace seguro…';message.className='message';
+  const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:redirectUrl(),shouldCreateUser:false}});
+  if(error){message.textContent='No fue posible enviar el enlace. Verificá que el correo ya esté autorizado.';message.className='message error';return;}
+  message.textContent='Revisá tu correo y abrí el enlace de acceso.';
+}
+async function saveNewPassword(event){
+  event.preventDefault();const password=$('#new-password').value,confirm=$('#confirm-password').value,message=$('#password-message');
+  if(password!==confirm){message.textContent='Las contraseñas no coinciden.';message.className='message error';return;}
+  message.textContent='Guardando…';message.className='message';
+  const {error}=await client.auth.updateUser({password});
+  if(error){message.textContent='No fue posible guardar la contraseña. Solicitá un enlace nuevo.';message.className='message error';return;}
+  message.textContent='Contraseña guardada.';setTimeout(()=>{$('#password-dialog').close();client.auth.getSession().then(({data})=>showSession(data.session));},600);
 }
 
 async function loadData() {
@@ -191,7 +219,7 @@ async function searchClientCase(event){
 
 async function showSession(session){if(!session){currentOrganization=null;currentMembership=null;loginView.classList.remove('hidden');appView.classList.add('hidden');return;}const email=session.user.email.toLowerCase();const membershipResult=await client.from('monitor_organization_members').select('organization_id,display_name,role').eq('email',email).eq('active',true).limit(1).maybeSingle();if(membershipResult.error||!membershipResult.data){await client.auth.signOut();$('#login-message').textContent='Este correo todavía no pertenece a una empresa activa.';$('#login-message').className='message error';return;}const organizationResult=await client.from('monitor_organizations').select('*').eq('id',membershipResult.data.organization_id).eq('active',true).single();if(organizationResult.error){await client.auth.signOut();$('#login-message').textContent='No fue posible abrir la empresa asignada.';return;}currentMembership=membershipResult.data;currentOrganization=organizationResult.data;$('#organization-name').textContent=currentOrganization.name;$('#organization-plan').textContent=`Plan ${currentOrganization.plan} · hasta ${currentOrganization.max_cases} expedientes`;$('#user-greeting').textContent=`Buenos días, ${currentMembership.display_name}`;loginView.classList.add('hidden');appView.classList.remove('hidden');await loadData();}
 
-$('#login-form').addEventListener('submit',signIn); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=loadData; $('#logout-btn').onclick=()=>client.auth.signOut(); $('#search').addEventListener('input',e=>renderWatches(e.target.value));
+$('#login-form').addEventListener('submit',signIn);$('#reset-password-btn').onclick=requestPasswordReset;$('#magic-link-btn').onclick=requestMagicLink;$('#password-form').addEventListener('submit',saveNewPassword); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=loadData; $('#logout-btn').onclick=()=>client.auth.signOut(); $('#search').addEventListener('input',e=>renderWatches(e.target.value));
 $('#export-btn').onclick=exportExcel;
 ['#status-filter','#priority-filter','#emitted-filter','#deadline-filter'].forEach(selector=>$(selector).onchange=()=>renderWatches($('#search').value));
 $('#import-btn').onclick=()=>$('#import-file').click();$('#import-file').onchange=event=>{const file=event.target.files[0];if(file)importCsv(file);event.target.value='';};
@@ -199,5 +227,5 @@ $('#save-management').onclick=saveManagement;$('#note-form').addEventListener('s
 $('#open-client-preview').onclick=openClientPreview;$('#close-client-preview').onclick=closeClientPreview;
 const clientMode=Boolean(new URLSearchParams(location.search).get('cliente'));
 if(clientMode){loginView.classList.add('hidden');appView.classList.add('hidden');$('#client-public-view').classList.remove('hidden');$('#client-search-form').addEventListener('submit',searchClientCase);$('#client-new-search').onclick=()=>{$('#client-result').classList.add('hidden');$('#client-search-panel').classList.remove('hidden');$('#client-search-form').reset();};}
-else{client.auth.onAuthStateChange((_event,session)=>setTimeout(()=>showSession(session),0));client.auth.getSession().then(({data})=>showSession(data.session));}
+else{client.auth.onAuthStateChange((event,session)=>{if(event==='PASSWORD_RECOVERY'){setTimeout(()=>$('#password-dialog').showModal(),0);return;}setTimeout(()=>showSession(session),0);});client.auth.getSession().then(({data})=>showSession(data.session));}
 
