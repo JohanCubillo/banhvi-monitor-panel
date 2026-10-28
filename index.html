@@ -16,7 +16,7 @@
     <section id="client-public-view" class="client-public-shell hidden">
       <div class="client-public-card">
         <div class="brand"><div class="mark small"><span></span><span></span><span></span><span></span></div><div><strong>Seguimiento BANHVI</strong><small>Consulta para clientes</small></div></div>
-        <div id="client-search-panel"><p class="eyebrow">CONSULTE SU EXPEDIENTE</p><h1>Estado de su solicitud</h1><p class="lead">Ingrese los datos exactos proporcionados por su asesor.</p><form id="client-search-form"><label for="client-cedula">Número de cédula</label><input id="client-cedula" inputmode="numeric" pattern="[0-9]{9,12}" maxlength="12" required><label for="client-case">Número de caso BANHVI</label><input id="client-case" inputmode="numeric" pattern="[0-9]{5,20}" maxlength="20" required><button class="primary" type="submit">Consultar estado →</button></form><p id="client-search-message" class="message" role="status"></p><a class="admin-link" href="./">Acceso administrativo</a></div>
+        <div id="client-search-panel"><p class="eyebrow">CONSULTE SU EXPEDIENTE</p><h1>Estado de su solicitud</h1><p class="lead">Por seguridad verificaremos el correo registrado por su asesor.</p><form id="client-search-form"><label for="client-email">Correo registrado</label><input id="client-email" type="email" autocomplete="email" required><label for="client-cedula">Número de cédula</label><input id="client-cedula" inputmode="numeric" pattern="[0-9]{9,12}" maxlength="12" required><label for="client-case">Número de caso BANHVI</label><input id="client-case" inputmode="numeric" pattern="[0-9]{5,20}" maxlength="20" required><label class="check-row consent-check"><input id="client-consent" type="checkbox" required> Autorizo el uso de estos datos para consultar y dar seguimiento a mi expediente. He leído el <button id="open-privacy" class="inline-link" type="button">aviso de privacidad</button>.</label><button id="client-search-submit" class="primary" type="submit">Verificar correo y continuar →</button></form><p id="client-search-message" class="message" role="status"></p><div class="client-links"><button id="open-rights" class="inline-link" type="button">Ejercer derechos sobre mis datos</button><a class="admin-link" href="./">Acceso administrativo</a></div></div>
         <div id="client-result" class="hidden"><button id="client-new-search" class="ghost" type="button">← Nueva consulta</button><div class="client-hero"><p class="eyebrow">ESTADO DE SU SOLICITUD</p><h2 id="public-client-title"></h2><p id="public-client-updated"></p><div id="public-client-status" class="client-status"></div></div><section class="client-section"><h3>Historial del trámite</h3><div id="public-client-states" class="state-list"></div></section><section class="client-section"><h3>Información compartida</h3><div id="public-client-notes" class="mini-list"></div></section><section class="client-section"><h3>Documentos disponibles</h3><div id="public-client-documents" class="mini-list"></div></section></div>
       </div>
     </section>
@@ -67,6 +67,12 @@
           <div class="panel-head"><div><h3>Actividad reciente</h3><p>Cambios y notificaciones registrados.</p></div></div>
           <div id="activity-list" class="activity-list"><div class="empty">Sin actividad reciente.</div></div>
         </section>
+
+        <section id="compliance-panel" class="panel hidden">
+          <div class="panel-head"><div><h3>Privacidad y auditoría</h3><p>Consentimientos, solicitudes y movimientos registrados.</p></div></div>
+          <div class="compliance-metrics"><article><strong id="metric-consents">0</strong><span>consentimientos</span></article><article><strong id="metric-privacy-requests">0</strong><span>solicitudes pendientes</span></article><article><strong id="metric-audit">0</strong><span>acciones auditadas</span></article></div>
+          <div id="privacy-request-list" class="activity-list"><div class="empty">Sin solicitudes pendientes.</div></div>
+        </section>
       </div>
     </section>
   </main>
@@ -94,6 +100,20 @@
       <input id="confirm-password" type="password" autocomplete="new-password" minlength="8" required>
       <p id="password-message" class="message" role="status"></p>
       <div class="dialog-actions"><button class="primary" type="submit">Guardar contraseña</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="privacy-dialog" class="legal-dialog">
+    <div class="legal-content"><div class="dialog-head"><div><p class="eyebrow">BORRADOR PARA REVISIÓN LEGAL</p><h3>Aviso de privacidad</h3></div><button id="close-privacy" type="button" class="icon-btn" aria-label="Cerrar">×</button></div><p>La empresa responsable de su expediente utilizará su cédula, número de caso, correo y estados del trámite exclusivamente para consultar, administrar y comunicar el seguimiento de su solicitud BANHVI.</p><h4>Proveedores tecnológicos</h4><p>La información puede ser procesada mediante Supabase, GitHub Pages y servicios de correo electrónico. No se venderán sus datos.</p><h4>Sus derechos</h4><p>Puede solicitar acceso, rectificación, eliminación o retirar su consentimiento. La conservación se limitará al tiempo necesario para atender el expediente y las obligaciones aplicables.</p><p class="form-note">Este documento es un borrador técnico. Debe completarse con el nombre legal, identificación, domicilio, correo de privacidad y plazo definitivo de conservación.</p></div>
+  </dialog>
+
+  <dialog id="rights-dialog">
+    <form id="rights-form">
+      <div class="dialog-head"><div><p class="eyebrow">PROTECCIÓN DE DATOS</p><h3>Solicitud de privacidad</h3></div><button id="close-rights" type="button" class="icon-btn" aria-label="Cerrar">×</button></div>
+      <p>Primero debe verificar su correo desde la consulta del expediente.</p>
+      <label for="rights-type">Tipo de solicitud</label><select id="rights-type" required><option value="access">Acceso a mis datos</option><option value="rectification">Rectificación</option><option value="deletion">Eliminación</option><option value="withdraw_consent">Retirar consentimiento</option></select>
+      <label for="rights-details">Detalle</label><textarea id="rights-details" maxlength="2000" required></textarea>
+      <p id="rights-message" class="message" role="status"></p><div class="dialog-actions"><button class="primary" type="submit">Enviar solicitud</button></div>
     </form>
   </dialog>
 
@@ -128,7 +148,7 @@
 
   <div id="toast" class="toast" role="status"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="app.js?v=20261027-4"></script>
+  <script src="app.js?v=20261027-5"></script>
 </body>
 </html>
 
