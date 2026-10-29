@@ -5,6 +5,7 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const $ = (selector) => document.querySelector(selector);
 const loginView = $('#login-view');
 const appView = $('#app-view');
+const landingView = $('#landing-view');
 let watches = [];
 let events = [];
 let notes = [];
@@ -17,6 +18,12 @@ let consents = [];
 let privacyRequests = [];
 let auditEvents = [];
 let verifiedClientCase = null;
+let caseProfiles = [];
+let caseFeaturesAvailable = false;
+const profileFor = watch => caseProfiles.find(p=>p.watch_id===watch.id);
+const canEditCases = () => ['owner','admin','agent'].includes(currentMembership?.role);
+const caseManager = BonoManagement.mount({container:'#integral-case-management',client,getContext:()=>({organization:currentOrganization,membership:currentMembership}),onSaved:async()=>{await loadData();const watch=watches.find(w=>w.id===currentWatchId);if(watch)$('#internal-deadline').innerHTML=formalizationHtml(watch);},toast});
+const operationsReports = BonoReports.mount({container:'#operations-reports',getData:()=>({watches,profiles:caseProfiles,events,documents,tasks}),onOpen:id=>openDetail(id),canExport:()=>['owner','admin'].includes(currentMembership?.role),toast});
 
 function trafficStatus(watch){
   if(watch.last_error)return 'red';
@@ -24,12 +31,9 @@ function trafficStatus(watch){
   if(watch.last_success_at&&(Date.now()-new Date(watch.last_success_at))/864e5>3)return 'yellow';
   return 'green';
 }
-function formalizationInfo(states=[]){
-  const emitted=(states||[]).filter(s=>String(s.description||'').trim().toUpperCase()==='EMITIDO').sort((a,b)=>{const [da,ma,ya]=a.date.split('/').map(Number),[db,mb,yb]=b.date.split('/').map(Number);return new Date(yb,mb-1,db)-new Date(ya,ma-1,da);})[0];
-  if(!emitted)return null;const [d,m,y]=emitted.date.split('/').map(Number),start=new Date(y,m-1,d),deadline=new Date(start);deadline.setDate(deadline.getDate()+90);const today=new Date();today.setHours(0,0,0,0);const elapsed=Math.max(0,Math.floor((today-start)/864e5));return{emittedDate:start,date:deadline,days:Math.ceil((deadline-today)/864e5),elapsed};
-}
-function formalizationHtml(states){const info=formalizationInfo(states);if(!info)return'';const deadline=new Intl.DateTimeFormat('es-CR',{dateStyle:'long'}).format(info.date),progress=info.elapsed===1?'Ha pasado 1 de 90 días desde la emisión':`Han pasado ${info.elapsed} de 90 días desde la emisión`,remaining=info.days<0?`El plazo se excedió hace ${Math.abs(info.days)} días`:info.days===0?'El plazo vence hoy':info.days===1?'Falta 1 día para formalizar':`Faltan ${info.days} días para formalizar`;return`<span class="deadline-alert ${info.days<=10?'urgent':''}"><strong>Plazo de formalización</strong><small>${escapeHtml(progress)}. ${escapeHtml(remaining)} · Fecha límite: ${escapeHtml(deadline)}</small></span>`;}
-function formalizationRowHtml(states){const info=formalizationInfo(states);if(!info)return'';const progress=`${info.elapsed} de 90 días`,remaining=info.days<0?`vencido hace ${Math.abs(info.days)} días`:info.days===0?'vence hoy':info.days===1?'falta 1 día':`faltan ${info.days} días`;return`<span class="row-deadline ${info.days<=10?'urgent':''}"><strong>Formalización:</strong> ${escapeHtml(progress)} · ${escapeHtml(remaining)}</span>`;}
+function formalizationInfo(watch){return BonoCase.formalizationInfo(watch,profileFor(watch)||{});}
+function formalizationHtml(watch){const info=formalizationInfo(watch);if(!info)return'';if(info.completed)return'<span class="deadline-alert">Formalización completada · Recordatorios detenidos</span>';const deadline=new Intl.DateTimeFormat('es-CR',{dateStyle:'long',timeZone:'UTC'}).format(new Date(info.date+'T12:00:00Z'));return`<span class="deadline-alert ${info.days<=10?'urgent':''}"><strong>Meta interna de formalización</strong><small>${info.elapsed} de ${info.totalDays} días desde EMITIDO · ${info.days<0?`${Math.abs(info.days)} días después de la meta`:`Faltan ${info.days} días`} · ${escapeHtml(deadline)}</small></span>`;}
+function formalizationRowHtml(watch){const info=formalizationInfo(watch);if(!info)return'';if(info.completed)return'<span class="row-deadline">Formalización completada</span>';return`<span class="row-deadline ${info.days<=10?'urgent':''}"><strong>${info.elapsed} días desde EMITIDO</strong> · Meta ${info.totalDays} días · ${info.days<0?`excedida ${Math.abs(info.days)} días`:`faltan ${info.days} días`}</span>`;}
 
 function formatDate(value) {
   if (!value) return 'Aún no revisado';
@@ -54,7 +58,7 @@ async function signIn(event) {
 }
 
 function loginEmail(){return $('#email').value.trim().toLowerCase();}
-function redirectUrl(){return `${location.origin}${location.pathname}`;}
+function redirectUrl(){return `${location.origin}${location.pathname}?admin=1`;}
 async function requestPasswordReset(){
   const email=loginEmail(),message=$('#login-message');
   if(!email){message.textContent='Primero escribí tu correo autorizado.';message.className='message error';$('#email').focus();return;}
@@ -88,12 +92,16 @@ async function loadData() {
   ]);
   if (watchResult.error || eventResult.error) { toast('No fue posible cargar los datos'); return; }
   watches=watchResult.data||[]; events=eventResult.data||[];
-  const [noteResult,taskResult,documentResult]=await Promise.all([
+  const [noteResult,taskResult,documentResult,profileResult]=await Promise.all([
     client.from('monitor_notes').select('*').order('created_at',{ascending:false}),
     client.from('monitor_tasks').select('*').order('created_at',{ascending:false}),
-    client.from('monitor_documents').select('*').order('created_at',{ascending:false})
+    client.from('monitor_documents').select('*').order('created_at',{ascending:false}),
+    client.from('monitor_case_profiles').select('*').eq('organization_id',currentOrganization.id)
   ]);
   notes=noteResult.data||[];tasks=taskResult.data||[];documents=documentResult.data||[];
+  caseProfiles=profileResult.data||[];caseFeaturesAvailable=!profileResult.error;
+  $('#case-feature-message').classList.toggle('hidden',caseFeaturesAvailable);
+  $('#case-feature-message').textContent=caseFeaturesAvailable?'':'La gestión integral requiere activar la migración de expedientes. Los estados existentes siguen disponibles.';
   if(['owner','admin'].includes(currentMembership?.role)){
     const [consentResult,requestResult,auditResult]=await Promise.all([
       client.from('monitor_client_consents').select('id,accepted_at,withdrawn_at'),
@@ -114,6 +122,7 @@ function render() {
   renderWatches($('#search').value);
   renderActivity();
   renderCompliance();
+  operationsReports.render();
 }
 
 function renderCompliance(){
@@ -129,14 +138,16 @@ function renderCompliance(){
 function renderWatches(query='') {
   const q=query.trim().toLowerCase();
   const status=$('#status-filter')?.value||'',priority=$('#priority-filter')?.value||'',emitted=$('#emitted-filter')?.value||'',deadline=$('#deadline-filter')?.value||'';
-  const matchesDeadline=info=>!deadline||(deadline==='expired'&&info?.days<0)||(deadline==='0-5'&&info?.days>=0&&info.days<=5)||(deadline==='6-10'&&info?.days>=6&&info.days<=10)||(deadline==='11-30'&&info?.days>=11&&info.days<=30)||(deadline==='31+'&&info?.days>=31);
-  const rows=watches.filter(w=>{const info=formalizationInfo(w.last_states),searchValues=[w.label,w.cedula,w.case_number,w.assigned_to,latestState(w.last_states),info?'emitido':'',info?.elapsed,info?.days];return searchValues.some(v=>String(v??'').toLowerCase().includes(q));}).filter(w=>!status||trafficStatus(w)===status).filter(w=>!priority||w.priority===priority).filter(w=>{const info=formalizationInfo(w.last_states);return(!emitted||(emitted==='yes'&&info)||(emitted==='no'&&!info))&&matchesDeadline(info);});
+  const matchesDeadline=info=>!deadline||(!info?.completed&&((deadline==='expired'&&info?.days<0)||(deadline==='0-5'&&info?.days>=0&&info.days<=5)||(deadline==='6-10'&&info?.days>=6&&info.days<=10)||(deadline==='11-30'&&info?.days>=11&&info.days<=30)||(deadline==='31+'&&info?.days>=31)));
+  const modality=$('#modality-filter').value,stage=$('#stage-filter').value;
+  const rows=watches.filter(w=>{const info=formalizationInfo(w),p=profileFor(w),searchValues=[w.label,w.cedula,w.case_number,w.assigned_to,p?.financial_entity,latestState(w.last_states),info?'emitido':'',info?.elapsed,info?.days];return searchValues.some(v=>String(v??'').toLowerCase().includes(q));}).filter(w=>!status||trafficStatus(w)===status).filter(w=>!priority||w.priority===priority).filter(w=>!modality||profileFor(w)?.modality===modality).filter(w=>!stage||profileFor(w)?.workflow_stage===stage).filter(w=>{const info=formalizationInfo(w);return(!emitted||(emitted==='yes'&&info)||(emitted==='no'&&!info))&&matchesDeadline(info);});
+  if($('#case-sort').value==='deadline')rows.sort((a,b)=>{const x=formalizationInfo(a),y=formalizationInfo(b);return (x&&!x.completed?x.days:Infinity)-(y&&!y.completed?y.days:Infinity);});
   $('#watch-list').innerHTML=rows.length?rows.map(w=>`<article class="watch-row ${trafficStatus(w)==='red'?'attention':trafficStatus(w)==='yellow'?'near-due':''}">
     <div class="watch-name"><div class="watch-icon">${escapeHtml((w.label||'E').slice(0,1).toUpperCase())}</div><div><strong><span class="traffic ${trafficStatus(w)}"></span>${escapeHtml(w.label||'Sin nombre')}</strong><small>Cédula ${escapeHtml(w.cedula)}</small><span class="priority">${escapeHtml(w.priority||'normal')} · ${escapeHtml(w.assigned_to||'Sin responsable')}</span></div></div>
-    <div class="cell"><span class="cell-label">Caso BANHVI</span><strong>${w.case_number?`#${escapeHtml(w.case_number)}`:'Pendiente'}</strong></div>
-    <div class="cell"><span class="cell-label">Estado actual</span><strong>${escapeHtml(latestState(w.last_states))}</strong><small>${escapeHtml(formatDate(w.last_success_at))}</small>${formalizationRowHtml(w.last_states)}</div>
+    <div class="cell"><span class="cell-label">Caso BANHVI</span><strong>${w.case_number?`#${escapeHtml(w.case_number)}`:'Pendiente'}</strong><small>${escapeHtml(BonoCase.stages.find(s=>s.id===profileFor(w)?.workflow_stage)?.label||'Gestión por configurar')}</small></div>
+    <div class="cell"><span class="cell-label">Estado actual</span><strong>${escapeHtml(latestState(w.last_states))}</strong><small>${escapeHtml(formatDate(w.last_success_at))}</small>${formalizationRowHtml(w)}${profileFor(w)?`<small>Documentación: ${BonoCase.checklistStats(profileFor(w).checklist).percent}% completa</small>`:''}</div>
     <div><span class="badge ${w.last_error?'error':w.enabled?'':'paused'}">${w.last_error?'Revisar':w.enabled?'Activo':'Pausado'}</span></div>
-    <div class="row-actions"><button data-detail="${w.id}" title="Ver estados">Ver</button><button data-toggle="${w.id}" title="${w.enabled?'Pausar':'Activar'}">${w.enabled?'Pausar':'Activar'}</button></div>
+    <div class="row-actions"><button data-detail="${w.id}" title="Ver estados y gestionar">Ver</button>${canEditCases()?`<button data-toggle="${w.id}" title="${w.enabled?'Pausar':'Activar'}">${w.enabled?'Pausar':'Activar'}</button>`:''}</div>
   </article>`).join(''):'<div class="empty">No encontramos expedientes.</div>';
   document.querySelectorAll('[data-detail]').forEach(b=>b.onclick=()=>openDetail(b.dataset.detail));
   document.querySelectorAll('[data-toggle]').forEach(b=>b.onclick=()=>toggleWatch(b.dataset.toggle));
@@ -176,16 +187,22 @@ async function addWatch(event){
   event.preventDefault(); const cedula=$('#cedula').value.trim(),label=$('#label').value.trim(),message=$('#add-message');
   if(!/^\d{9,12}$/.test(cedula)){message.textContent='Ingresá una cédula de 9 a 12 dígitos.';message.className='message error';return;}
   if(!currentOrganization){message.textContent='No hay una empresa activa para este usuario.';return;}
-  const {error}=await client.from('monitor_watches').insert({organization_id:currentOrganization.id,cedula,label,enabled:true});
+  const {data:created,error}=await client.from('monitor_watches').insert({organization_id:currentOrganization.id,cedula,label,enabled:true}).select('id,organization_id,created_at').single();
   if(error){message.textContent=error.code==='23505'?'Esa cédula ya está registrada.':'No se pudo guardar el expediente.';message.className='message error';return;}
-  $('#add-dialog').close(); $('#add-form').reset(); toast('Expediente agregado'); await loadData();
+  if(caseFeaturesAvailable){const defaults=BonoCase.profileDefaults(created),modality=$('#new-modality').value;const profile={...defaults,modality,checklist:BonoCase.requirementsFor(modality).map(r=>({...r,status:'pending',client_visible:false}))};const result=await client.from('monitor_case_profiles').insert(profile);if(result.error)toast('Expediente creado. Configurá sus requisitos desde Ver.');}
+  $('#add-dialog').close(); $('#add-form').reset(); toast('Expediente agregado'); await loadData();openDetail(created.id);
 }
 async function toggleWatch(id){ const watch=watches.find(w=>w.id===id); if(!watch)return; const {error}=await client.from('monitor_watches').update({enabled:!watch.enabled}).eq('id',id); if(error){toast('No se pudo cambiar el monitoreo');return;} toast(watch.enabled?'Monitoreo pausado':'Monitoreo activado');await loadData(); }
 function openDetail(id){
   const w=watches.find(x=>x.id===id);if(!w)return;currentWatchId=id;
   $('#detail-title').textContent=w.label||'Expediente';
   $('#detail-meta').innerHTML=`<span><i class="traffic ${trafficStatus(w)}"></i>Cédula ${escapeHtml(w.cedula)}</span><span>${w.case_number?`Caso #${escapeHtml(w.case_number)}`:'Caso pendiente'}</span><span>${w.enabled?'Activo':'Pausado'}</span>`;
-  $('#internal-deadline').innerHTML=formalizationHtml(w.last_states);
+  $('#internal-deadline').innerHTML=formalizationHtml(w);
+  $('#integral-case-management').classList.toggle('hidden',!caseFeaturesAvailable);
+  if(caseFeaturesAvailable)caseManager.open(w,profileFor(w)||{},documents);
+  $('#save-management').disabled=!canEditCases();$('#send-client-access').disabled=!canEditCases();
+  ['#note-form','#task-form','#document-form'].forEach(selector=>$(selector).querySelectorAll('input,textarea,button').forEach(el=>el.disabled=!canEditCases()));
+  $('#print-case').classList.toggle('hidden',!['owner','admin'].includes(currentMembership?.role));
   const states=Array.isArray(w.last_states)?[...w.last_states].reverse():[];
   $('#state-list').innerHTML=states.length?states.map(s=>`<div class="state"><time>${escapeHtml(s.date)}</time><strong>${escapeHtml(s.description)}</strong></div>`).join(''):'<div class="empty">La primera revisión todavía no se ha completado.</div>';
   $('#detail-priority').value=w.priority||'normal';$('#detail-assigned').value=w.assigned_to||'';$('#detail-due').value=w.due_at?new Date(new Date(w.due_at)-new Date(w.due_at).getTimezoneOffset()*60000).toISOString().slice(0,16):'';$('#detail-client-email').value=w.client_email||'';$('#detail-client-portal').checked=!!w.client_portal_enabled;
@@ -197,7 +214,7 @@ function renderCaseManagement(){
   $('#note-list').innerHTML=ownNotes.length?ownNotes.map(n=>`<div class="mini-item"><p>${escapeHtml(n.body)}</p><small>${formatDate(n.created_at)}${n.client_visible?' · Visible para cliente':''}</small></div>`).join(''):'<small>Sin notas.</small>';
   $('#task-list').innerHTML=ownTasks.length?ownTasks.map(t=>`<div class="mini-item ${t.completed_at?'done':''}"><label class="check-row"><input type="checkbox" data-task="${t.id}" ${t.completed_at?'checked':''}> ${escapeHtml(t.title)}</label><small>${t.due_at?`Vence ${formatDate(t.due_at)}`:'Sin fecha límite'}</small></div>`).join(''):'<small>Sin tareas.</small>';
   $('#document-list').innerHTML=ownDocs.length?ownDocs.map(d=>`<div class="mini-item"><strong>${escapeHtml(d.name)}</strong><br><small>${formatDate(d.created_at)}${d.client_visible?' · Visible para cliente':''}</small></div>`).join(''):'<small>Sin documentos.</small>';
-  document.querySelectorAll('[data-task]').forEach(el=>el.onchange=()=>toggleTask(el.dataset.task,el.checked));
+  document.querySelectorAll('[data-task]').forEach(el=>{el.disabled=!canEditCases();el.onchange=()=>toggleTask(el.dataset.task,el.checked);});
 }
 
 function openClientPreview(){
@@ -231,7 +248,7 @@ async function sendClientAccess(){
 }
 async function addNote(event){event.preventDefault();const body=$('#note-body').value.trim();if(!body||!currentWatchId)return;const {error}=await client.from('monitor_notes').insert({watch_id:currentWatchId,body,client_visible:$('#note-visible').checked});if(error){toast('No se pudo guardar la nota');return;}event.target.reset();await loadData();renderCaseManagement();toast('Nota agregada');}
 async function addTask(event){event.preventDefault();const title=$('#task-title').value.trim();if(!title||!currentWatchId)return;const {error}=await client.from('monitor_tasks').insert({watch_id:currentWatchId,title,due_at:$('#task-due').value?new Date($('#task-due').value).toISOString():null,assigned_to:$('#detail-assigned').value.trim()||null});if(error){toast('No se pudo crear la tarea');return;}event.target.reset();await loadData();renderCaseManagement();toast('Tarea creada');}
-async function toggleTask(id,done){const {error}=await client.from('monitor_tasks').update({completed_at:done?new Date().toISOString():null}).eq('id',id);if(error){toast('No se pudo actualizar la tarea');return;}await loadData();renderCaseManagement();}
+async function toggleTask(id,done){if(!canEditCases())return;const {error}=await client.from('monitor_tasks').update({completed_at:done?new Date().toISOString():null}).eq('id',id);if(error){toast('No se pudo actualizar la tarea');return;}await loadData();renderCaseManagement();}
 async function uploadDocument(event){event.preventDefault();const file=$('#document-file').files[0];if(!file||!currentWatchId)return;if(file.size>10485760){toast('El archivo supera 10 MB');return;}const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'_'),path=`${currentWatchId}/${crypto.randomUUID()}-${safe}`;const upload=await client.storage.from('monitor-documents').upload(path,file);if(upload.error){toast('No se pudo subir el documento');return;}const saved=await client.from('monitor_documents').insert({watch_id:currentWatchId,name:file.name,storage_path:path,client_visible:$('#document-visible').checked});if(saved.error){await client.storage.from('monitor-documents').remove([path]);toast('No se pudo registrar el documento');return;}event.target.reset();await loadData();renderCaseManagement();toast('Documento guardado');}
 
 async function importCsv(file){
@@ -256,6 +273,9 @@ async function searchClientCase(event){
   const portalValue=new URLSearchParams(location.search).get('cliente'),orgSlug=portalValue&&portalValue!=='1'?portalValue:null;const {data,error}=await client.rpc('lookup_client_case',{p_cedula:cedula,p_case_number:caseNumber,p_org_slug:orgSlug});if(error||!data){message.textContent='No encontramos un expediente habilitado para ese correo y esos datos.';message.className='message error';return;}
   const consentResult=await client.rpc('record_client_consent',{p_watch_id:data.watch_id,p_policy_version:data.policy_version,p_user_agent:navigator.userAgent});if(consentResult.error){message.textContent='No fue posible registrar el consentimiento.';message.className='message error';return;}
   verifiedClientCase=data;localStorage.removeItem('banhvi-client-pending');
+  const shared=await client.rpc('get_client_case_summary',{p_watch_id:data.watch_id});
+  const stageLabel=BonoCase.stages.find(s=>s.id===shared.data?.workflow_stage)?.label;
+  $('#public-client-summary').innerHTML=shared.error?'':BonoReports.clientSummaryHtml({client_summary:{advisor:shared.data?.assigned_to,next_step:stageLabel?`Etapa de gestión: ${stageLabel}. Consultá con tu asesor las próximas acciones.`:'',pending_documents:(shared.data?.requirements||[]).filter(r=>!['approved','not_applicable'].includes(r.status))}});
   message.textContent='';message.className='message';$('#client-search-panel').classList.add('hidden');$('#client-result').classList.remove('hidden');$('#public-client-title').textContent=data.label||'Su expediente';$('#public-client-updated').textContent=`Última actualización: ${formatDate(data.last_success_at)}`;$('#public-client-status').innerHTML=escapeHtml(latestState(data.last_states));
   const states=Array.isArray(data.last_states)?[...data.last_states].reverse():[];$('#public-client-states').innerHTML=states.length?states.map(s=>`<div class="state"><time>${escapeHtml(s.date)}</time><strong>${escapeHtml(s.description)}</strong></div>`).join(''):'<div class="empty">Aún no hay estados disponibles.</div>';$('#public-client-notes').innerHTML=(data.notes||[]).length?data.notes.map(n=>`<div class="mini-item"><p>${escapeHtml(n.body)}</p><small>${formatDate(n.created_at)}</small></div>`).join(''):'<div class="empty">No hay información adicional compartida.</div>';$('#public-client-documents').innerHTML=(data.documents||[]).length?data.documents.map(d=>`<div class="mini-item"><strong>${escapeHtml(d.name)}</strong></div>`).join(''):'<div class="empty">No hay documentos compartidos.</div>';
 }
@@ -271,11 +291,31 @@ async function showSession(session){if(!session){currentOrganization=null;curren
 
 $('#login-form').addEventListener('submit',signIn);$('#reset-password-btn').onclick=requestPasswordReset;$('#magic-link-btn').onclick=requestMagicLink;$('#password-form').addEventListener('submit',saveNewPassword); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=loadData; $('#logout-btn').onclick=()=>client.auth.signOut(); $('#search').addEventListener('input',e=>renderWatches(e.target.value));
 $('#export-btn').onclick=exportExcel;
-['#status-filter','#priority-filter','#emitted-filter','#deadline-filter'].forEach(selector=>$(selector).onchange=()=>renderWatches($('#search').value));
+['#status-filter','#priority-filter','#emitted-filter','#deadline-filter','#modality-filter','#stage-filter','#case-sort'].forEach(selector=>$(selector).onchange=()=>renderWatches($('#search').value));
+$('#new-modality').innerHTML=BonoCase.modalities.map(m=>`<option value="${m.id}">${escapeHtml(m.label)}</option>`).join('');
+$('#modality-filter').innerHTML='<option value="">Todas las modalidades</option>'+$('#new-modality').innerHTML;
+$('#stage-filter').innerHTML='<option value="">Todas las etapas internas</option>'+BonoCase.stages.map(s=>`<option value="${s.id}">${escapeHtml(s.label)}</option>`).join('');
+$('#client-education').innerHTML=BonoReports.educationHtml();
+document.querySelectorAll('[data-admin-view]').forEach(button=>button.onclick=()=>{const report=button.dataset.adminView==='reports';$('#admin-summary').classList.toggle('hidden',report);$('#operations-reports').classList.toggle('hidden',!report);document.querySelectorAll('[data-admin-view]').forEach(b=>{b.classList.toggle('selected',b===button);if(b===button)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});if(report)operationsReports.render();else if(button.dataset.adminView==='cases')$('#watch-list').scrollIntoView({behavior:'smooth',block:'start'});});
+$('#print-case').onclick=()=>{const w=watches.find(w=>w.id===currentWatchId);if(w)BonoReports.printCase(w,profileFor(w)||{},notes,documents,tasks);};
 $('#import-btn').onclick=()=>$('#import-file').click();$('#import-file').onchange=event=>{const file=event.target.files[0];if(file)importCsv(file);event.target.value='';};
 $('#save-management').onclick=saveManagement;$('#send-client-access').onclick=sendClientAccess;$('#note-form').addEventListener('submit',addNote);$('#task-form').addEventListener('submit',addTask);$('#document-form').addEventListener('submit',uploadDocument);
 $('#open-client-preview').onclick=openClientPreview;$('#close-client-preview').onclick=closeClientPreview;
-const clientMode=Boolean(new URLSearchParams(location.search).get('cliente'));
-if(clientMode){loginView.classList.add('hidden');appView.classList.add('hidden');$('#client-public-view').classList.remove('hidden');$('#client-search-form').addEventListener('submit',searchClientCase);$('#open-privacy').onclick=()=>$('#privacy-dialog').showModal();$('#close-privacy').onclick=()=>$('#privacy-dialog').close();$('#open-rights').onclick=()=>$('#rights-dialog').showModal();$('#close-rights').onclick=()=>$('#rights-dialog').close();$('#rights-form').addEventListener('submit',submitPrivacyRequest);$('#client-new-search').onclick=async()=>{$('#client-result').classList.add('hidden');$('#client-search-panel').classList.remove('hidden');$('#client-search-form').reset();verifiedClientCase=null;await client.auth.signOut();};const pending=JSON.parse(localStorage.getItem('banhvi-client-pending')||'null');if(pending){$('#client-email').value=pending.email;$('#client-cedula').value=pending.cedula;$('#client-case').value=pending.caseNumber;$('#client-consent').checked=!!pending.consent;}client.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_IN'&&session&&pending)setTimeout(()=>searchClientCase(),0);});client.auth.getSession().then(({data})=>{if(data.session&&pending)searchClientCase();});}
-else{client.auth.onAuthStateChange((event,session)=>{if(event==='PASSWORD_RECOVERY'){setTimeout(()=>$('#password-dialog').showModal(),0);return;}setTimeout(()=>showSession(session),0);});client.auth.getSession().then(({data})=>showSession(data.session));}
-
+const routeParams=new URLSearchParams(location.search);
+const clientMode=Boolean(routeParams.get('cliente'));
+const adminMode=routeParams.get('admin')==='1';
+const demoContent=$('#demo-preview-content');
+if(demoContent){
+  const demoSummary=demoContent.innerHTML;
+  const demoViews={
+    resumen:demoSummary,
+    expedientes:`<div class="preview-title"><div><h2>Expedientes</h2><p>124 casos registrados · 118 activos</p></div><button type="button">+ Nuevo expediente</button></div><div class="demo-list"><div class="demo-list-row"><strong>Familia Rojas</strong><span class="demo-state">EMITIDO</span><small>22 días</small></div><div class="demo-list-row"><strong>Familia Rodríguez</strong><span class="demo-state warn">EN TRÁMITE</span><small>Actualizado hoy</small></div><div class="demo-list-row"><strong>Familia Méndez</strong><span class="demo-state">FORMALIZADO</span><small>Completado</small></div><div class="demo-list-row"><strong>Proyecto Los Pinos</strong><span class="demo-state">APROBADO</span><small>Sin alertas</small></div></div>`,
+    clientes:`<div class="preview-title"><div><h2>Clientes</h2><p>Acceso seguro al estado de cada solicitud</p></div><button type="button">Invitar cliente</button></div><div class="demo-list"><div class="demo-list-row"><strong>María Rojas</strong><span>Portal activo</span><small>Ingresó hoy</small></div><div class="demo-list-row"><strong>José Rodríguez</strong><span>Invitación enviada</span><small>Ayer</small></div><div class="demo-list-row"><strong>Ana Méndez</strong><span>Portal activo</span><small>Hace 3 días</small></div></div>`,
+    alertas:`<div class="preview-title"><div><h2>Alertas</h2><p>3 expedientes requieren atención</p></div></div><div class="demo-list"><div class="demo-list-row"><strong>Familia Rodríguez</strong><span class="demo-state warn">78 de 90 días</span><small>Formalizar pronto</small></div><div class="demo-list-row"><strong>Familia Solano</strong><span class="demo-state warn">Error de consulta</span><small>Revisar datos</small></div><div class="demo-list-row"><strong>Familia Vargas</strong><span class="demo-state">Cambio detectado</span><small>Correo enviado</small></div></div>`,
+    reportes:`<div class="preview-title"><div><h2>Reportes</h2><p>Resumen operativo · últimos 6 meses</p></div><button type="button">Exportar</button></div><div class="report-kpis"><span><small>Expedientes activos</small><strong>118</strong><em>+12 este mes</em></span><span><small>Cambios detectados</small><strong>37</strong><em>96% notificados</em></span><span><small>Formalizados</small><strong>24</strong><em>Promedio: 63 días</em></span></div><div class="report-grid"><section><div class="report-section-title"><strong>Actividad mensual</strong><small>Consultas y cambios</small></div><div class="demo-report-bars" aria-label="Actividad mensual de ejemplo"><span style="--bar:38%"><b>18</b><i>May</i></span><span style="--bar:48%"><b>24</b><i>Jun</i></span><span style="--bar:72%"><b>36</b><i>Jul</i></span><span style="--bar:54%"><b>27</b><i>Ago</i></span><span style="--bar:88%"><b>44</b><i>Sep</i></span><span style="--bar:66%"><b>33</b><i>Oct</i></span></div></section><section class="status-breakdown"><div class="report-section-title"><strong>Estado de cartera</strong><small>124 expedientes</small></div><ul><li><i class="dot green"></i><span>En seguimiento</span><strong>72</strong></li><li><i class="dot mint"></i><span>Emitidos</span><strong>28</strong></li><li><i class="dot gold"></i><span>Por formalizar</span><strong>17</strong></li><li><i class="dot red"></i><span>Requieren atención</span><strong>7</strong></li></ul></section></div>`
+  };
+  document.querySelectorAll('[data-demo-tab]').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('[data-demo-tab]').forEach(item=>item.classList.toggle('active',item===button));demoContent.innerHTML=demoViews[button.dataset.demoTab]||demoSummary;}));
+}
+if(clientMode){landingView.classList.add('hidden');loginView.classList.add('hidden');appView.classList.add('hidden');$('#client-public-view').classList.remove('hidden');$('#client-search-form').addEventListener('submit',searchClientCase);$('#open-privacy').onclick=()=>$('#privacy-dialog').showModal();$('#close-privacy').onclick=()=>$('#privacy-dialog').close();$('#open-rights').onclick=()=>$('#rights-dialog').showModal();$('#close-rights').onclick=()=>$('#rights-dialog').close();$('#rights-form').addEventListener('submit',submitPrivacyRequest);$('#client-new-search').onclick=async()=>{$('#client-result').classList.add('hidden');$('#client-search-panel').classList.remove('hidden');$('#client-search-form').reset();verifiedClientCase=null;await client.auth.signOut();};const pending=JSON.parse(localStorage.getItem('banhvi-client-pending')||'null');if(pending){$('#client-email').value=pending.email;$('#client-cedula').value=pending.cedula;$('#client-case').value=pending.caseNumber;$('#client-consent').checked=!!pending.consent;}client.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_IN'&&session&&pending)setTimeout(()=>searchClientCase(),0);});client.auth.getSession().then(({data})=>{if(data.session&&pending)searchClientCase();});}
+else if(adminMode){landingView.classList.add('hidden');loginView.classList.remove('hidden');client.auth.onAuthStateChange((event,session)=>{if(event==='PASSWORD_RECOVERY'){setTimeout(()=>$('#password-dialog').showModal(),0);return;}setTimeout(()=>showSession(session),0);});client.auth.getSession().then(({data})=>showSession(data.session));}
+else{loginView.classList.add('hidden');appView.classList.add('hidden');landingView.classList.remove('hidden');}

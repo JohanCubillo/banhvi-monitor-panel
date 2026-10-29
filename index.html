@@ -4,23 +4,77 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b3b47">
-  <title>Monitor BANHVI</title>
+  <title>BonoAlerta | Seguimiento de expedientes de bono de vivienda</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20261028">
+  <link rel="stylesheet" href="case-management.css?v=20261028">
+  <link rel="stylesheet" href="operations-reports.css?v=20261028">
 </head>
 <body>
   <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
   <main>
+    <section id="landing-view" class="landing-shell">
+      <header class="landing-nav">
+        <a class="landing-brand" href="./" aria-label="BonoAlerta, inicio">
+          <span class="mark small" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+          <strong>Bono<span>Alerta</span></strong>
+        </a>
+        <nav aria-label="Navegación principal">
+          <a href="#producto">Producto</a><a href="#empresas">Empresas</a><a href="#precios">Precios</a><a href="#seguridad">Seguridad</a><a href="#contacto">Contacto</a>
+        </nav>
+        <div class="landing-nav-actions"><a class="landing-secondary" href="?cliente=johan-cubillo">Consultar expediente</a><a class="landing-primary" href="?admin=1">Ingresar al panel <span>→</span></a></div>
+      </header>
+
+      <div class="landing-hero" id="producto">
+        <div class="landing-copy">
+          <p class="eyebrow">OPERACIÓN EMPRESARIAL</p>
+          <h1>Cada expediente<br>bajo control.<br><span>Cada cliente informado.</span></h1>
+          <p>Monitoreo de expedientes de bono de vivienda, documentos, alertas y seguimiento de obra. Organizá las metas de formalización y mantené a tus clientes informados con un portal dedicado.</p>
+          <div class="landing-cta"><a class="landing-primary large" href="mailto:johanrayoal7@gmail.com?subject=Demostración%20de%20BonoAlerta">Solicitar demostración <span>→</span></a><a class="landing-secondary large" href="#empresas">Ver cómo funciona</a></div>
+          <small>Plataforma independiente. No es un servicio oficial del BANHVI.</small>
+        </div>
+
+        <div class="landing-visual" aria-label="Vista previa del panel BonoAlerta">
+          <img src="assets/bonoalerta-construction-hero.png" alt="Proyecto residencial en construcción en Costa Rica">
+          <div class="product-preview">
+            <div class="preview-top"><div class="landing-brand compact"><span class="mark small" aria-hidden="true"><span></span><span></span><span></span><span></span></span><strong>Bono<span>Alerta</span></strong></div><span class="preview-avatar">JC</span></div>
+            <div class="preview-body">
+              <aside aria-label="Demostración del panel"><button class="demo-tab active" type="button" data-demo-tab="resumen">Resumen</button><button class="demo-tab" type="button" data-demo-tab="expedientes">Expedientes</button><button class="demo-tab" type="button" data-demo-tab="clientes">Clientes</button><button class="demo-tab" type="button" data-demo-tab="alertas">Alertas</button><button class="demo-tab" type="button" data-demo-tab="reportes">Reportes</button></aside>
+              <div class="preview-main" id="demo-preview-content"><div class="preview-title"><div><h2>Buenos días, Johan</h2><p>Tu operación al día · 28 de octubre de 2026</p></div><button type="button">+ Nuevo expediente</button></div>
+                <div class="preview-metrics"><span><small>Expedientes</small><strong>124</strong></span><span><small>Monitoreo activo</small><strong>118</strong></span><span><small>Cambios</small><strong>7</strong></span><span class="alert"><small>Requieren atención</small><strong>3</strong></span></div>
+                <div class="preview-table"><div class="preview-table-head"><strong>Expedientes monitoreados</strong><span>Buscar por nombre, cédula o caso</span></div><div class="preview-row labels"><span>Cliente</span><span>Estado actual</span><span>Días desde EMITIDO</span></div><div class="preview-row"><strong>María Fernanda Rojas</strong><em>EMITIDO</em><span>22 días</span></div><div class="preview-row"><strong>Familia Rodríguez</strong><em class="warning">EN TRÁMITE</em><span class="warning-text">78 días</span></div><div class="preview-row"><strong>Carlos Méndez</strong><em>FORMALIZADO</em><span>5 días</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <section class="landing-benefits" id="empresas"><article><span class="benefit-icon bi bi-arrow-repeat" aria-hidden="true"></span><div><h2>Monitoreo automático</h2><p>Consultas programadas, historial y avisos ante cambios del expediente.</p></div></article><article><span class="benefit-icon bi bi-bell" aria-hidden="true"></span><div><h2>Metas y documentos al día</h2><p>Plazos internos configurables, requisitos por modalidad y avisos de vencimientos.</p></div></article><article><span class="benefit-icon bi bi-people" aria-hidden="true"></span><div><h2>Portal para clientes</h2><p>Cada cliente consulta el estado y los requisitos que compartís con él.</p></div></article></section>
+      <section class="pricing-section" id="precios">
+        <div class="section-heading"><p class="eyebrow">PRECIOS SIMPLES</p><h2>Un plan para cada etapa</h2><p>Empezá pequeño y aumentá la capacidad cuando tu cartera crezca. Sin costos ocultos.</p></div>
+        <div class="pricing-grid">
+          <article class="price-card"><div><p class="plan-name">Inicio</p><h3><small>₡</small>7.900 <span>/ mes</span></h3><p>Una entrada económica para profesionales con pocos expedientes activos.</p></div><ul><li><i class="bi bi-check-circle" aria-hidden="true"></i> Hasta 20 expedientes</li><li><i class="bi bi-check-circle" aria-hidden="true"></i> 1 usuario administrativo</li><li><i class="bi bi-check-circle" aria-hidden="true"></i> Monitoreo automático</li><li><i class="bi bi-check-circle" aria-hidden="true"></i> Alertas por correo</li></ul><a class="landing-secondary" href="mailto:johanrayoal7@gmail.com?subject=Plan%20Inicio%20BonoAlerta">Elegir Inicio</a></article>
+          <article class="price-card"><div><p class="plan-name">Equipo</p><h3><small>₡</small>19.900 <span>/ mes</span></h3><p>Para equipos que necesitan administrar clientes y distribuir el seguimiento.</p></div><ul><li><i class="bi bi-check-circle" aria-hidden="true"></i> Hasta 80 expedientes</li><li><i class="bi bi-check-circle" aria-hidden="true"></i> Hasta 2 usuarios</li><li><i class="bi bi-check-circle" aria-hidden="true"></i> Portal para clientes</li><li><i class="bi bi-check-circle" aria-hidden="true"></i> Importación y exportación</li></ul><a class="landing-secondary" href="mailto:johanrayoal7@gmail.com?subject=Plan%20Equipo%20BonoAlerta">Elegir Equipo</a></article>
+          <article class="price-card featured"><span class="popular">MEJOR VALOR</span><div><p class="plan-name">Empresa</p><h3><small>₡</small>24.900 <span>/ mes</span></h3><p>Más capacidad y control completo por solo ₡5.000 adicionales al mes.</p></div><ul><li><i class="bi bi-check-circle" aria-hidden="true"></i> Hasta 250 expedientes</li><li><i class="bi bi-check-circle" aria-hidden="true"></i> Hasta 5 usuarios</li><li><i class="bi bi-check-circle" aria-hidden="true"></i> Todo lo del plan Equipo</li><li><i class="bi bi-check-circle" aria-hidden="true"></i> Prioridades, tareas y auditoría</li><li><i class="bi bi-check-circle" aria-hidden="true"></i> Configuración acompañada</li></ul><a class="landing-primary" href="mailto:johanrayoal7@gmail.com?subject=Plan%20Empresa%20BonoAlerta">Elegir Empresa <span>→</span></a></article>
+        </div><p class="pricing-note">Precios introductorios en colones costarricenses. La capacidad puede ajustarse según la operación.</p>
+      </section>
+      <section class="landing-trust" id="seguridad"><p class="eyebrow">SEGURIDAD Y TRANSPARENCIA</p><h2>Información clara, acceso controlado</h2><p>Los clientes verifican su correo antes de consultar. Cada empresa administra únicamente sus propios expedientes y decide qué información comparte.</p></section>
+      <footer id="contacto"><div class="landing-brand compact"><span class="mark small" aria-hidden="true"><span></span><span></span><span></span><span></span></span><strong>Bono<span>Alerta</span></strong></div><p>Seguimiento independiente para empresas y familias.</p><a class="footer-whatsapp" href="https://wa.me/50660492466?text=Hola%2C%20quiero%20informaci%C3%B3n%20sobre%20BonoAlerta" target="_blank" rel="noopener"><i class="bi bi-whatsapp" aria-hidden="true"></i> 6049-2466</a></footer>
+      <a class="whatsapp-float" href="https://wa.me/50660492466?text=Hola%2C%20quiero%20informaci%C3%B3n%20sobre%20BonoAlerta" target="_blank" rel="noopener" aria-label="Contactar a BonoAlerta por WhatsApp"><i class="bi bi-whatsapp" aria-hidden="true"></i><span>Escribinos</span></a>
+    </section>
+
     <section id="client-public-view" class="client-public-shell hidden">
       <div class="client-public-card">
-        <div class="brand"><div class="mark small"><span></span><span></span><span></span><span></span></div><div><strong>Seguimiento BANHVI</strong><small>Consulta para clientes</small></div></div>
-        <div id="client-search-panel"><p class="eyebrow">CONSULTE SU EXPEDIENTE</p><h1>Estado de su solicitud</h1><p class="lead">Por seguridad verificaremos el correo registrado por su asesor.</p><form id="client-search-form"><label for="client-email">Correo registrado</label><input id="client-email" type="email" autocomplete="email" required><label for="client-cedula">Número de cédula</label><input id="client-cedula" inputmode="numeric" pattern="[0-9]{9,12}" maxlength="12" required><label for="client-case">Número de caso BANHVI</label><input id="client-case" inputmode="numeric" pattern="[0-9]{5,20}" maxlength="20" required><label class="check-row consent-check"><input id="client-consent" type="checkbox" required> Autorizo el uso de estos datos para consultar y dar seguimiento a mi expediente. He leído el <button id="open-privacy" class="inline-link" type="button">aviso de privacidad</button>.</label><button id="client-search-submit" class="primary" type="submit">Verificar correo y continuar →</button></form><p id="client-search-message" class="message" role="status"></p><div class="client-links"><button id="open-rights" class="inline-link" type="button">Ejercer derechos sobre mis datos</button><a class="admin-link" href="./">Acceso administrativo</a></div></div>
-        <div id="client-result" class="hidden"><button id="client-new-search" class="ghost" type="button">← Nueva consulta</button><div class="client-hero"><p class="eyebrow">ESTADO DE SU SOLICITUD</p><h2 id="public-client-title"></h2><p id="public-client-updated"></p><div id="public-client-status" class="client-status"></div></div><section class="client-section"><h3>Historial del trámite</h3><div id="public-client-states" class="state-list"></div></section><section class="client-section"><h3>Información compartida</h3><div id="public-client-notes" class="mini-list"></div></section><section class="client-section"><h3>Documentos disponibles</h3><div id="public-client-documents" class="mini-list"></div></section></div>
+        <div class="brand"><div class="mark small"><span></span><span></span><span></span><span></span></div><div><strong>BonoAlerta</strong><small>Consulta para clientes</small></div></div>
+        <div id="client-search-panel"><p class="eyebrow">CONSULTE SU EXPEDIENTE</p><h1>Estado de su solicitud</h1><p class="lead">Por seguridad verificaremos el correo registrado por su asesor.</p><form id="client-search-form"><label for="client-email">Correo registrado</label><input id="client-email" type="email" autocomplete="email" required><label for="client-cedula">Número de cédula</label><input id="client-cedula" inputmode="numeric" pattern="[0-9]{9,12}" maxlength="12" required><label for="client-case">Número de caso BANHVI</label><input id="client-case" inputmode="numeric" pattern="[0-9]{5,20}" maxlength="20" required><label class="check-row consent-check"><input id="client-consent" type="checkbox" required> Autorizo el uso de estos datos para consultar y dar seguimiento a mi expediente. He leído el <button id="open-privacy" class="inline-link" type="button">aviso de privacidad</button>.</label><button id="client-search-submit" class="primary" type="submit">Verificar correo y continuar →</button></form><p id="client-search-message" class="message" role="status"></p><div class="client-links"><button id="open-rights" class="inline-link" type="button">Ejercer derechos sobre mis datos</button><a class="admin-link" href="?admin=1">Acceso administrativo</a><a class="admin-link back-home" href="./">Volver a BonoAlerta</a></div></div>
+        <div id="client-result" class="hidden"><button id="client-new-search" class="ghost" type="button">← Nueva consulta</button><div class="client-hero"><p class="eyebrow">ESTADO DE SU SOLICITUD</p><h2 id="public-client-title"></h2><p id="public-client-updated"></p><div id="public-client-status" class="client-status"></div></div><div id="public-client-summary"></div><section class="client-section"><h3>Historial del trámite</h3><div id="public-client-states" class="state-list"></div></section><section class="client-section"><h3>Información compartida</h3><div id="public-client-notes" class="mini-list"></div></section><section class="client-section"><h3>Documentos disponibles</h3><div id="public-client-documents" class="mini-list"></div></section></div>
+        <div id="client-education" class="client-section"></div>
       </div>
     </section>
-    <section id="login-view" class="auth-shell">
+    <section id="login-view" class="auth-shell hidden">
       <div class="auth-card">
         <div class="mark" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
         <p class="eyebrow">SEGUIMIENTO DE EXPEDIENTES</p>
@@ -49,6 +103,9 @@
       </header>
 
       <div class="content">
+        <nav class="admin-navigation" aria-label="Panel administrativo"><button type="button" class="ghost selected" data-admin-view="summary" aria-current="page">Resumen</button><button type="button" class="ghost" data-admin-view="cases">Expedientes</button><button type="button" class="ghost" data-admin-view="reports">Reportes y alertas</button></nav>
+        <div id="case-feature-message" class="form-note hidden" role="status"></div>
+        <div id="admin-summary">
         <div class="welcome"><div><p class="eyebrow">RESUMEN GENERAL</p><h2 id="user-greeting">Buenos días</h2><p>Revisamos BANHVI cada 30 minutos, de 7:17 a. m. a 7:17 p. m.</p></div><div class="welcome-actions"><button id="import-btn" class="ghost">Importar CSV</button><button id="export-btn" class="ghost">Exportar a Excel</button><button id="open-add" class="primary compact">+ Nuevo expediente</button><input id="import-file" type="file" accept=".csv,text/csv" hidden></div></div>
 
         <div class="metrics">
@@ -60,6 +117,7 @@
 
         <section class="panel">
           <div class="panel-head"><div><h3>Expedientes monitoreados</h3><p>Estado más reciente de cada consulta.</p></div><div class="filters"><div class="search-wrap"><input id="search" type="search" placeholder="Buscar nombre, cédula, caso o EMITIDO"></div><select id="emitted-filter" aria-label="Filtrar por estado emitido"><option value="">Todos los expedientes</option><option value="yes">Con EMITIDO</option><option value="no">Sin EMITIDO</option></select><select id="deadline-filter" aria-label="Filtrar por días restantes"><option value="">Cualquier plazo</option><option value="expired">Plazo vencido</option><option value="0-5">Faltan 0–5 días</option><option value="6-10">Faltan 6–10 días</option><option value="11-30">Faltan 11–30 días</option><option value="31+">Faltan más de 30 días</option></select><select id="priority-filter" aria-label="Filtrar por prioridad"><option value="">Toda prioridad</option><option value="urgent">Urgente</option><option value="high">Alta</option><option value="normal">Normal</option><option value="low">Baja</option></select><select id="status-filter" aria-label="Filtrar por semáforo"><option value="">Cualquier atención</option><option value="red">Requieren atención</option><option value="yellow">Próximos a vencer</option><option value="green">Al día</option></select></div></div>
+          <div class="case-extra-filters"><select id="modality-filter" aria-label="Modalidad"></select><select id="stage-filter" aria-label="Etapa interna"></select><select id="case-sort" aria-label="Ordenar expedientes"><option value="created">Más recientes</option><option value="deadline">Prioridad por meta de emitidos</option></select></div>
           <div id="watch-list" class="watch-list"><div class="empty">Cargando expedientes…</div></div>
         </section>
 
@@ -73,6 +131,8 @@
           <div class="compliance-metrics"><article><strong id="metric-consents">0</strong><span>consentimientos</span></article><article><strong id="metric-privacy-requests">0</strong><span>solicitudes pendientes</span></article><article><strong id="metric-audit">0</strong><span>acciones auditadas</span></article></div>
           <div id="privacy-request-list" class="activity-list"><div class="empty">Sin solicitudes pendientes.</div></div>
         </section>
+        </div>
+        <section id="operations-reports" class="hidden" aria-label="Reportes operativos"></section>
       </div>
     </section>
   </main>
@@ -84,6 +144,7 @@
       <input id="cedula" inputmode="numeric" pattern="[0-9]{9,12}" minlength="9" maxlength="12" placeholder="Ej. 113630495" required>
       <label for="label">Nombre o referencia</label>
       <input id="label" maxlength="120" placeholder="Ej. Familia Rodríguez" required>
+      <label for="new-modality">Modalidad</label><select id="new-modality" required></select>
       <p class="form-note">La primera revisión guardará el estado inicial sin enviar una alerta.</p>
       <p id="add-message" class="message" role="status"></p>
       <div class="dialog-actions"><button type="button" class="ghost" id="cancel-add">Cancelar</button><button type="submit" class="primary">Guardar expediente</button></div>
@@ -120,7 +181,8 @@
   <dialog id="detail-dialog" class="detail-dialog">
     <div class="dialog-head"><div><p class="eyebrow">DETALLE DEL EXPEDIENTE</p><h3 id="detail-title">Expediente</h3></div><button type="button" class="icon-btn" id="close-detail" aria-label="Cerrar">×</button></div>
     <div id="detail-meta" class="detail-meta"></div>
-    <button id="open-client-preview" type="button" class="ghost">Vista previa del cliente</button><div id="internal-deadline"></div>
+    <div class="management-actions"><button id="open-client-preview" type="button" class="ghost">Vista previa del cliente</button><button id="print-case" type="button" class="ghost">Imprimir expediente / PDF</button></div><div id="internal-deadline"></div>
+    <div id="integral-case-management"></div>
     <div id="state-list" class="state-list"></div>
     <div class="case-management">
       <h4>Gestión interna</h4>
@@ -149,7 +211,9 @@
 
   <div id="toast" class="toast" role="status"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="app.js?v=20261027-6"></script>
+  <script src="case-domain.js?v=20261028"></script>
+  <script src="case-management.js?v=20261028"></script>
+  <script src="operations-reports.js?v=20261028"></script>
+  <script src="app.js?v=20261028-1"></script>
 </body>
 </html>
-
