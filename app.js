@@ -1,3 +1,5 @@
+(function(){
+if(location.protocol==='file:')return;
 const SUPABASE_URL = 'https://vhdygrooeipxibnpofxf.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_I4uK-zm16tOepB_N2TzXqg_WlVd22QB';
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
@@ -69,13 +71,13 @@ async function signIn(event) {
 }
 
 function loginEmail(){return $('#email').value.trim().toLowerCase();}
-function redirectUrl(activate=false){const params=new URLSearchParams({admin:'1'});if(activate)params.set('activar','1');if(authParams.get('empresa'))params.set('empresa',authParams.get('empresa'));return `${location.origin}${location.pathname}?${params}`;}
+function redirectUrl(activate=false){return BonoAuth.redirectUrl(location,{activate,organizationSlug:authParams.get('empresa')});}
 async function requestPasswordReset(){
   const email=loginEmail(),message=$('#login-message');
   if(!email){message.textContent='Primero escribí tu correo autorizado.';message.className='message error';$('#email').focus();return;}
   message.textContent='Enviando instrucciones…';message.className='message';
   const {error}=await client.auth.resetPasswordForEmail(email,{redirectTo:redirectUrl()});
-  if(error){message.textContent='No fue posible enviar el correo. Intentá nuevamente.';message.className='message error';return;}
+  if(error){message.textContent=BonoAuth.describeError(error);message.className='message error';return;}
   message.textContent='Si la cuenta ya existe, recibirás un enlace para cambiar tu contraseña. Para una cuenta nueva, usá “Activar acceso por primera vez”.';
 }
 async function requestMagicLink(activate=false){
@@ -84,7 +86,7 @@ async function requestMagicLink(activate=false){
   message.textContent='Enviando enlace seguro…';message.className='message';
   if(activate)sessionStorage.setItem('bonoalerta-activation',email);
   const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:redirectUrl(activate),shouldCreateUser:activate}});
-  if(error){message.textContent='No fue posible enviar el enlace. Verificá que el correo ya esté autorizado.';message.className='message error';return;}
+  if(error){message.textContent=BonoAuth.describeError(error);message.className='message error';return;}
   message.textContent=activate?'Revisá tu correo para verificar la cuenta. El acceso a la empresa depende de la asignación del superadministrador.':'Revisá tu correo y abrí el enlace de acceso.';
 }
 async function saveNewPassword(event){
@@ -287,8 +289,8 @@ async function searchClientCase(event){
   if(!session){
     if(!$('#client-consent').checked){message.textContent='Debe aceptar el aviso de privacidad para continuar.';message.className='message error';return;}
     const pending={email,cedula,caseNumber,consent:true};localStorage.setItem('banhvi-client-pending',JSON.stringify(pending));message.textContent='Enviando enlace de verificación…';message.className='message';
-    const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:location.href,shouldCreateUser:true}});
-    if(error){message.textContent='No fue posible enviar el enlace de verificación.';message.className='message error';return;}
+    const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:BonoAuth.redirectUrl(location,{clientSlug:new URLSearchParams(location.search).get('cliente')||'1'}),shouldCreateUser:true}});
+    if(error){message.textContent=BonoAuth.describeError(error);message.className='message error';return;}
     message.textContent='Revisá tu correo y abrí el enlace. Después mostraremos únicamente tu expediente.';return;
   }
   if(session.user.email?.toLowerCase()!==email){await client.auth.signOut();message.textContent='El correo verificado no coincide. Volvé a intentarlo.';message.className='message error';return;}
@@ -395,3 +397,4 @@ if(demoContent){
 if(clientMode){landingView.classList.add('hidden');loginView.classList.add('hidden');appView.classList.add('hidden');$('#client-public-view').classList.remove('hidden');$('#client-search-form').addEventListener('submit',searchClientCase);$('#open-privacy').onclick=()=>$('#privacy-dialog').showModal();$('#close-privacy').onclick=()=>$('#privacy-dialog').close();$('#open-rights').onclick=()=>$('#rights-dialog').showModal();$('#close-rights').onclick=()=>$('#rights-dialog').close();$('#rights-form').addEventListener('submit',submitPrivacyRequest);$('#client-new-search').onclick=async()=>{$('#client-result').classList.add('hidden');$('#client-search-panel').classList.remove('hidden');$('#client-search-form').reset();verifiedClientCase=null;await client.auth.signOut();};const pending=JSON.parse(localStorage.getItem('banhvi-client-pending')||'null');if(pending){$('#client-email').value=pending.email;$('#client-cedula').value=pending.cedula;$('#client-case').value=pending.caseNumber;$('#client-consent').checked=!!pending.consent;}client.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_IN'&&session&&pending)setTimeout(()=>searchClientCase(),0);});client.auth.getSession().then(({data})=>{if(data.session&&pending)searchClientCase();});}
 else if(adminMode){landingView.classList.add('hidden');loginView.classList.remove('hidden');client.auth.onAuthStateChange((event,session)=>{if(event==='PASSWORD_RECOVERY'){setTimeout(()=>$('#password-dialog').showModal(),0);return;}setTimeout(()=>showSession(session),0);});client.auth.getSession().then(({data})=>showSession(data.session));}
 else{loginView.classList.add('hidden');appView.classList.add('hidden');landingView.classList.remove('hidden');}
+})();
