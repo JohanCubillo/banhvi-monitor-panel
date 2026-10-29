@@ -1,5 +1,8 @@
 (function(){
 if(location.protocol==='file:')return;
+const initialActivation=BonoAuth.activationContext(location);
+const initialHash=new URLSearchParams(location.hash.slice(1));
+let passwordRecoveryMode=initialHash.get('type')==='recovery'&&!!initialHash.get('access_token')&&!!initialHash.get('refresh_token')&&!initialHash.has('error');
 const SUPABASE_URL = 'https://vhdygrooeipxibnpofxf.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_I4uK-zm16tOepB_N2TzXqg_WlVd22QB';
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
@@ -29,6 +32,8 @@ let sessionUser = null;
 let currentAdminView = 'summary';
 let loadSequence = 0;
 let activationHandled = false;
+let activationVerificationAccepted = false;
+let passwordOwner = null;
 const authParams = new URLSearchParams(location.search);
 let activationMode = authParams.get('activar')==='1';
 const profileFor = watch => caseProfiles.find(p=>p.watch_id===watch.id);
@@ -66,7 +71,7 @@ async function signIn(event) {
   const message = $('#login-message');
   message.textContent='Verificando acceso…'; message.className='message';
   const { error } = await client.auth.signInWithPassword({ email, password });
-  if (error) { message.textContent='Correo o contraseña incorrectos. Podés recuperar tu contraseña abajo.'; message.className='message error'; return; }
+  if (error) { message.textContent=BonoAuth.describeError(error,{action:'password'}); message.className='message error'; return; }
   message.textContent='Acceso correcto.';
 }
 
@@ -84,18 +89,43 @@ async function requestMagicLink(activate=false){
   const email=loginEmail(),message=$('#login-message');
   if(!email){message.textContent='Primero escribí tu correo autorizado.';message.className='message error';$('#email').focus();return;}
   message.textContent='Enviando enlace seguro…';message.className='message';
-  if(activate)sessionStorage.setItem('bonoalerta-activation',email);
+  if(activate){
+    activationMode=true;activationHandled=false;activationVerificationAccepted=false;passwordOwner=null;renderAuthMode();
+    sessionStorage.setItem('bonoalerta-activation',email);
+    const {error:signOutError}=await client.auth.signOut({scope:'local'});
+    if(signOutError){message.textContent='No se pudo cerrar la sesión anterior. Abrí el enlace de activación en una ventana privada.';message.className='message error';return;}
+  }
   const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:redirectUrl(activate),shouldCreateUser:activate}});
   if(error){message.textContent=BonoAuth.describeError(error);message.className='message error';return;}
   message.textContent=activate?'Revisá tu correo para verificar la cuenta. El acceso a la empresa depende de la asignación del superadministrador.':'Revisá tu correo y abrí el enlace de acceso.';
 }
+function openPasswordDialog(session,reason){
+  if(!session?.user?.id||!session.user.email)return;
+  passwordOwner={id:session.user.id,email:session.user.email.toLowerCase()};
+  $('#password-identity').textContent=`La contraseña se guardará para: ${passwordOwner.email}`;
+  $('#new-password').value='';$('#confirm-password').value='';
+  $('#password-message').textContent=reason==='activation'?'Tu correo está verificado. Elegí tu contraseña para los próximos ingresos.':'Elegí una nueva contraseña para la cuenta indicada arriba.';
+  $('#password-message').className='message';
+  if(!$('#password-dialog').open)$('#password-dialog').showModal();
+}
 async function saveNewPassword(event){
   event.preventDefault();const password=$('#new-password').value,confirm=$('#confirm-password').value,message=$('#password-message');
   if(password!==confirm){message.textContent='Las contraseñas no coinciden.';message.className='message error';return;}
+  const owner=passwordOwner&&{...passwordOwner};
+  const {data:current,error:sessionError}=await client.auth.getSession();
+  const verifiedSession=current?.session;
+  if(sessionError||!owner||!verifiedSession?.access_token||verifiedSession.user?.id!==owner.id||verifiedSession.user?.email?.toLowerCase()!==owner.email){
+    passwordOwner=null;$('#password-dialog').close();loginView.classList.remove('hidden');appView.classList.add('hidden');$('#login-message').textContent='La sesión cambió. Abrí nuevamente el enlace enviado al correo que querés recuperar o activar.';$('#login-message').className='message error';return;
+  }
   message.textContent='Guardando…';message.className='message';
-  const {error}=await client.auth.updateUser({password});
-  if(error){message.textContent='No fue posible guardar la contraseña. Solicitá un enlace nuevo.';message.className='message error';return;}
-  activationHandled=true;activationMode=false;renderAuthMode();sessionStorage.removeItem('bonoalerta-activation');history.replaceState({},'',redirectUrl(false));message.textContent='Contraseña guardada.';setTimeout(()=>{$('#password-dialog').close();client.auth.getSession().then(({data})=>showSession(data.session));},600);
+  try{
+    // Bind the update to the verified identity even if another tab switches the shared Auth session.
+    const response=await fetch(`${SUPABASE_URL}/auth/v1/user`,{method:'PUT',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${verifiedSession.access_token}`,'Content-Type':'application/json'},body:JSON.stringify({password})});
+    const updated=await response.json().catch(()=>null);
+    const updatedUser=updated?.user||updated;
+    if(!response.ok||updatedUser?.id!==owner.id){message.textContent='No fue posible guardar la contraseña. Solicitá un enlace nuevo.';message.className='message error';return;}
+  }catch{message.textContent='No se pudo conectar con el servicio de acceso. Revisá la conexión antes de intentarlo nuevamente.';message.className='message error';return;}
+  passwordOwner=null;passwordRecoveryMode=false;activationHandled=true;activationMode=false;renderAuthMode();sessionStorage.removeItem('bonoalerta-activation');history.replaceState({},'',redirectUrl(false));message.textContent='Contraseña guardada.';setTimeout(()=>{$('#password-dialog').close();client.auth.getSession().then(({data})=>showSession(data.session));},600);
 }
 
 async function readRows(table,columns='*',configure=q=>q,order='created_at'){
@@ -346,6 +376,12 @@ async function selectOrganization(id){
 let sessionSequence=0;
 async function showSession(session){
   const sequence=++sessionSequence;
+  if(passwordRecoveryMode){loginView.classList.remove('hidden');appView.classList.add('hidden');return;}
+  if(activationMode&&!activationVerificationAccepted){
+    currentOrganization=null;currentMembership=null;isPlatformAdmin=false;sessionUser=null;clearCompanyData();loginView.classList.remove('hidden');appView.classList.add('hidden');
+    if(session){$('#login-message').textContent='Para activar otro acceso, verificá el correo autorizado con un enlace nuevo. La sesión anterior no cambiará su contraseña.';$('#login-message').className='message';}
+    return;
+  }
   if(!session){sessionUser=null;currentOrganization=null;currentMembership=null;isPlatformAdmin=false;sessionOrganizations=[];sessionMemberships=[];currentAdminView='summary';clearCompanyData();platformManager.render([],[],[]);$('#platform-admin').classList.add('hidden');$('#platform-navigation').classList.add('hidden');loginView.classList.remove('hidden');appView.classList.add('hidden');return;}
   sessionUser=session.user;const email=session.user.email?.toLowerCase();
   const [platform,members,organizations]=await Promise.all([client.rpc('platform_access'),readRows('monitor_organization_members','*',q=>q.eq('email',email).eq('active',true)),readRows('monitor_organizations')]);
@@ -362,7 +398,7 @@ async function showSession(session){
   loginView.classList.add('hidden');appView.classList.remove('hidden');
   const selected=active.find(org=>org.slug===authParams.get('empresa'))||active.find(org=>org.id===currentOrganization?.id)||active.find(org=>org.id===localStorage.getItem('bonoalerta-current-organization'))||active[0];
   if(selected)await selectOrganization(selected.id);else{currentOrganization=null;currentMembership=null;clearCompanyData();$('#organization-name').textContent='BonoAlerta';$('#organization-plan').textContent='Superadministrador';await openAdminView('platform');}
-  if(!activationHandled&&(activationMode||sessionStorage.getItem('bonoalerta-activation')===email)){activationHandled=true;$('#password-message').textContent='Tu acceso está verificado. Elegí tu contraseña para los próximos ingresos.';$('#password-dialog').showModal();}
+  if(!activationHandled&&activationMode&&activationVerificationAccepted){activationHandled=true;openPasswordDialog(session,'activation');}
 }
 
 $('#login-form').addEventListener('submit',signIn);$('#reset-password-btn').onclick=requestPasswordReset;$('#magic-link-btn').onclick=()=>requestMagicLink(false);$('#activate-access-btn').onclick=()=>requestMagicLink(true);$('#organization-picker').onchange=event=>selectOrganization(event.target.value);$('#password-form').addEventListener('submit',saveNewPassword); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=()=>currentAdminView==='platform'?loadPlatform():loadData(); $('#logout-btn').onclick=()=>client.auth.signOut(); $('#search').addEventListener('input',e=>renderWatches(e.target.value));
@@ -395,6 +431,16 @@ if(demoContent){
   document.querySelectorAll('[data-demo-tab]').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('[data-demo-tab]').forEach(item=>item.classList.toggle('active',item===button));demoContent.innerHTML=demoViews[button.dataset.demoTab]||demoSummary;}));
 }
 if(clientMode){landingView.classList.add('hidden');loginView.classList.add('hidden');appView.classList.add('hidden');$('#client-public-view').classList.remove('hidden');$('#client-search-form').addEventListener('submit',searchClientCase);$('#open-privacy').onclick=()=>$('#privacy-dialog').showModal();$('#close-privacy').onclick=()=>$('#privacy-dialog').close();$('#open-rights').onclick=()=>$('#rights-dialog').showModal();$('#close-rights').onclick=()=>$('#rights-dialog').close();$('#rights-form').addEventListener('submit',submitPrivacyRequest);$('#client-new-search').onclick=async()=>{$('#client-result').classList.add('hidden');$('#client-search-panel').classList.remove('hidden');$('#client-search-form').reset();verifiedClientCase=null;await client.auth.signOut();};const pending=JSON.parse(localStorage.getItem('banhvi-client-pending')||'null');if(pending){$('#client-email').value=pending.email;$('#client-cedula').value=pending.cedula;$('#client-case').value=pending.caseNumber;$('#client-consent').checked=!!pending.consent;}client.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_IN'&&session&&pending)setTimeout(()=>searchClientCase(),0);});client.auth.getSession().then(({data})=>{if(data.session&&pending)searchClientCase();});}
-else if(adminMode){landingView.classList.add('hidden');loginView.classList.remove('hidden');client.auth.onAuthStateChange((event,session)=>{if(event==='PASSWORD_RECOVERY'){setTimeout(()=>$('#password-dialog').showModal(),0);return;}setTimeout(()=>showSession(session),0);});client.auth.getSession().then(({data})=>showSession(data.session));}
+else if(adminMode){landingView.classList.add('hidden');loginView.classList.remove('hidden');client.auth.onAuthStateChange((event,session)=>{
+  if(event==='PASSWORD_RECOVERY'){passwordRecoveryMode=true;setTimeout(()=>openPasswordDialog(session,'recovery'),0);return;}
+  if(activationMode&&event==='SIGNED_IN'&&initialActivation.verifiedCallback){
+    const expectedEmail=sessionStorage.getItem('bonoalerta-activation');
+    if(expectedEmail&&session?.user?.email?.toLowerCase()!==expectedEmail){
+      activationVerificationAccepted=false;passwordOwner=null;setTimeout(()=>{$('#password-dialog').close();loginView.classList.remove('hidden');appView.classList.add('hidden');$('#login-message').textContent='El enlace corresponde a otro correo. Solicitá uno nuevo para el correo que querés activar.';$('#login-message').className='message error';},0);return;
+    }
+    activationVerificationAccepted=true;
+  }
+  setTimeout(()=>showSession(session),0);
+});client.auth.getSession().then(({data})=>showSession(data.session));}
 else{loginView.classList.add('hidden');appView.classList.add('hidden');landingView.classList.remove('hidden');}
 })();
