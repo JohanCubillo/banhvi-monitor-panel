@@ -215,6 +215,7 @@ function renderCaseManagement(){
   $('#task-list').innerHTML=ownTasks.length?ownTasks.map(t=>`<div class="mini-item ${t.completed_at?'done':''}"><label class="check-row"><input type="checkbox" data-task="${t.id}" ${t.completed_at?'checked':''}> ${escapeHtml(t.title)}</label><small>${t.due_at?`Vence ${formatDate(t.due_at)}`:'Sin fecha límite'}</small></div>`).join(''):'<small>Sin tareas.</small>';
   $('#document-list').innerHTML=ownDocs.length?ownDocs.map(d=>`<div class="mini-item"><strong>${escapeHtml(d.name)}</strong><br><small>${formatDate(d.created_at)}${d.client_visible?' · Visible para cliente':''}</small></div>`).join(''):'<small>Sin documentos.</small>';
   document.querySelectorAll('[data-task]').forEach(el=>{el.disabled=!canEditCases();el.onchange=()=>toggleTask(el.dataset.task,el.checked);});
+  caseManager.setDocuments(documents);
 }
 
 function openClientPreview(){

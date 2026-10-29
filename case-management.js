@@ -81,6 +81,9 @@
       container.querySelectorAll('.bm-panel').forEach(item=>item.hidden=item.id!==`bm-panel-${id}`);
     }
     function updateResults() {
+      const estimated=draft.costs.reduce((sum,item)=>sum+Number(item.amount||0),0),paid=draft.costs.reduce((sum,item)=>sum+Number(item.paid||0),0);
+      container.querySelectorAll('.bm-cost-summary strong').forEach((el,index)=>{el.textContent=money([estimated,paid,Math.max(0,estimated-paid)][index]);});
+      const disbursed=container.querySelector('.bm-total strong');if(disbursed)disbursed.textContent=money(draft.construction.disbursements.reduce((sum,item)=>sum+Number(item.amount||0),0));
       const pre=container.querySelector('.bm-prequal-result');
       if(pre){const result=domain()?.evaluatePrequalification(draft.prequalification);pre.innerHTML=result?`<strong>${escape(result.title)}</strong>${result.flags.length?`<ul>${result.flags.map(item=>`<li>${escape(item)}</li>`).join('')}</ul>`:''}${result.missing.length?`<ul>${result.missing.map(item=>`<li>${escape(item)}</li>`).join('')}</ul>`:''}<p>${escape(result.disclaimer)}</p>`:'<p>Completá la información y confirmá los requisitos con la entidad.</p>';}
       const deadline=container.querySelector('.bm-deadline-result');
@@ -131,6 +134,7 @@
         render();
       },
       close(){container.innerHTML='';watch=null;draft=null;dirty=false;},
+      setDocuments(items){if(!watch)return;capture();uploaded=items.filter(item=>item.watch_id===watch.id);render();},
       getProfile(){if(draft)capture();return draft?clone(draft):null;},
       hasUnsavedChanges(){return dirty;}
     };
