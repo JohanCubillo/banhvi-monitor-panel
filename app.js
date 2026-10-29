@@ -20,10 +20,20 @@ let auditEvents = [];
 let verifiedClientCase = null;
 let caseProfiles = [];
 let caseFeaturesAvailable = false;
+let isPlatformAdmin = false;
+let sessionOrganizations = [];
+let sessionMemberships = [];
+let sessionUser = null;
+let currentAdminView = 'summary';
+let loadSequence = 0;
+let activationHandled = false;
+const authParams = new URLSearchParams(location.search);
+let activationMode = authParams.get('activar')==='1';
 const profileFor = watch => caseProfiles.find(p=>p.watch_id===watch.id);
 const canEditCases = () => ['owner','admin','agent'].includes(currentMembership?.role);
 const caseManager = BonoManagement.mount({container:'#integral-case-management',client,getContext:()=>({organization:currentOrganization,membership:currentMembership}),onSaved:async()=>{await loadData();const watch=watches.find(w=>w.id===currentWatchId);if(watch)$('#internal-deadline').innerHTML=formalizationHtml(watch);},toast});
 const operationsReports = BonoReports.mount({container:'#operations-reports',getData:()=>({watches,profiles:caseProfiles,events,documents,tasks}),onOpen:id=>openDetail(id),canExport:()=>['owner','admin'].includes(currentMembership?.role),toast});
+const platformManager = BonoPlatform.mount({container:'#platform-admin',client,getContext:()=>({isPlatformAdmin,currentOrganization}),onChanged:async()=>{if(sessionUser)await showSession({user:sessionUser});},toast});
 
 function trafficStatus(watch){
   if(watch.last_error)return 'red';
@@ -48,6 +58,7 @@ function toast(text){ const el=$('#toast'); el.textContent=text; el.classList.ad
 
 async function signIn(event) {
   event.preventDefault();
+  if(activationMode){await requestMagicLink(true);return;}
   const email = $('#email').value.trim().toLowerCase();
   const password = $('#password').value;
   const message = $('#login-message');
@@ -58,22 +69,23 @@ async function signIn(event) {
 }
 
 function loginEmail(){return $('#email').value.trim().toLowerCase();}
-function redirectUrl(){return `${location.origin}${location.pathname}?admin=1`;}
+function redirectUrl(activate=false){const params=new URLSearchParams({admin:'1'});if(activate)params.set('activar','1');if(authParams.get('empresa'))params.set('empresa',authParams.get('empresa'));return `${location.origin}${location.pathname}?${params}`;}
 async function requestPasswordReset(){
   const email=loginEmail(),message=$('#login-message');
   if(!email){message.textContent='Primero escribí tu correo autorizado.';message.className='message error';$('#email').focus();return;}
   message.textContent='Enviando instrucciones…';message.className='message';
   const {error}=await client.auth.resetPasswordForEmail(email,{redirectTo:redirectUrl()});
   if(error){message.textContent='No fue posible enviar el correo. Intentá nuevamente.';message.className='message error';return;}
-  message.textContent='Si el correo está autorizado, recibirás un enlace para crear o cambiar tu contraseña.';
+  message.textContent='Si la cuenta ya existe, recibirás un enlace para cambiar tu contraseña. Para una cuenta nueva, usá “Activar acceso por primera vez”.';
 }
-async function requestMagicLink(){
+async function requestMagicLink(activate=false){
   const email=loginEmail(),message=$('#login-message');
   if(!email){message.textContent='Primero escribí tu correo autorizado.';message.className='message error';$('#email').focus();return;}
   message.textContent='Enviando enlace seguro…';message.className='message';
-  const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:redirectUrl(),shouldCreateUser:false}});
+  if(activate)sessionStorage.setItem('bonoalerta-activation',email);
+  const {error}=await client.auth.signInWithOtp({email,options:{emailRedirectTo:redirectUrl(activate),shouldCreateUser:activate}});
   if(error){message.textContent='No fue posible enviar el enlace. Verificá que el correo ya esté autorizado.';message.className='message error';return;}
-  message.textContent='Revisá tu correo y abrí el enlace de acceso.';
+  message.textContent=activate?'Revisá tu correo para verificar la cuenta. El acceso a la empresa depende de la asignación del superadministrador.':'Revisá tu correo y abrí el enlace de acceso.';
 }
 async function saveNewPassword(event){
   event.preventDefault();const password=$('#new-password').value,confirm=$('#confirm-password').value,message=$('#password-message');
@@ -81,37 +93,47 @@ async function saveNewPassword(event){
   message.textContent='Guardando…';message.className='message';
   const {error}=await client.auth.updateUser({password});
   if(error){message.textContent='No fue posible guardar la contraseña. Solicitá un enlace nuevo.';message.className='message error';return;}
-  message.textContent='Contraseña guardada.';setTimeout(()=>{$('#password-dialog').close();client.auth.getSession().then(({data})=>showSession(data.session));},600);
+  activationHandled=true;activationMode=false;renderAuthMode();sessionStorage.removeItem('bonoalerta-activation');history.replaceState({},'',redirectUrl(false));message.textContent='Contraseña guardada.';setTimeout(()=>{$('#password-dialog').close();client.auth.getSession().then(({data})=>showSession(data.session));},600);
 }
 
+async function readRows(table,columns='*',configure=q=>q,order='created_at'){
+  const data=[];
+  for(let offset=0;;offset+=500){const result=await configure(client.from(table).select(columns)).order(order,{ascending:false}).range(offset,offset+499);if(result.error)return{data:null,error:result.error};data.push(...(result.data||[]));if((result.data||[]).length<500)return{data,error:null};}
+}
+async function readWatchRows(table,columns,ids){
+  const data=[];for(let offset=0;offset<ids.length;offset+=80){const result=await readRows(table,columns,q=>q.in('watch_id',ids.slice(offset,offset+80)));if(result.error)return result;data.push(...result.data);}return{data:data.sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))),error:null};
+}
 async function loadData() {
+  if(!currentOrganization?.active)return;
+  const organizationId=currentOrganization.id,sequence=++loadSequence;
   $('#sync-status').innerHTML='<i></i> Actualizando…';
-  const [watchResult,eventResult] = await Promise.all([
-    client.from('monitor_watches').select('*').order('created_at',{ascending:false}),
-    client.from('monitor_outbox').select('id,watch_id,status,created_at,sent_at,before_states,after_states').order('created_at',{ascending:false})
+  const watchResult=await readRows('monitor_watches','*',q=>q.eq('organization_id',organizationId));
+  if(sequence!==loadSequence)return;
+  if(watchResult.error){$('#sync-status').textContent='Error de actualización';toast('No fue posible cargar los expedientes de esta empresa');return;}
+  const nextWatches=watchResult.data||[],ids=nextWatches.map(w=>w.id);
+  const [eventResult,noteResult,taskResult,documentResult,profileResult]=await Promise.all([
+    readWatchRows('monitor_outbox','id,watch_id,status,created_at,sent_at,before_states,after_states',ids),
+    readWatchRows('monitor_notes','*',ids),readWatchRows('monitor_tasks','*',ids),readWatchRows('monitor_documents','*',ids),
+    readRows('monitor_case_profiles','*',q=>q.eq('organization_id',organizationId),'watch_id')
   ]);
-  if (watchResult.error || eventResult.error) { toast('No fue posible cargar los datos'); return; }
-  watches=watchResult.data||[]; events=eventResult.data||[];
-  const [noteResult,taskResult,documentResult,profileResult]=await Promise.all([
-    client.from('monitor_notes').select('*').order('created_at',{ascending:false}),
-    client.from('monitor_tasks').select('*').order('created_at',{ascending:false}),
-    client.from('monitor_documents').select('*').order('created_at',{ascending:false}),
-    client.from('monitor_case_profiles').select('*').eq('organization_id',currentOrganization.id)
-  ]);
+  if(sequence!==loadSequence)return;
+  watches=nextWatches;events=eventResult.data||[];
   notes=noteResult.data||[];tasks=taskResult.data||[];documents=documentResult.data||[];
   caseProfiles=profileResult.data||[];caseFeaturesAvailable=!profileResult.error;
   $('#case-feature-message').classList.toggle('hidden',caseFeaturesAvailable);
   $('#case-feature-message').textContent=caseFeaturesAvailable?'':'La gestión integral requiere activar la migración de expedientes. Los estados existentes siguen disponibles.';
   if(['owner','admin'].includes(currentMembership?.role)){
     const [consentResult,requestResult,auditResult]=await Promise.all([
-      client.from('monitor_client_consents').select('id,accepted_at,withdrawn_at'),
-      client.from('monitor_privacy_requests').select('*').order('created_at',{ascending:false}),
-      client.from('monitor_audit_log').select('id,action,entity_type,created_at').order('created_at',{ascending:false}).limit(1000)
+      readRows('monitor_client_consents','id,accepted_at,withdrawn_at',q=>q.eq('organization_id',organizationId),'accepted_at'),
+      readRows('monitor_privacy_requests','*',q=>q.eq('organization_id',organizationId)),
+      client.from('monitor_audit_log').select('id,action,entity_type,created_at').eq('organization_id',organizationId).order('created_at',{ascending:false}).limit(1000)
     ]);
+    if(sequence!==loadSequence)return;
     consents=consentResult.data||[];privacyRequests=requestResult.data||[];auditEvents=auditResult.data||[];
   }
   render();
   $('#sync-status').innerHTML='<i></i> Sincronizado';
+  if(eventResult.error||noteResult.error||taskResult.error||documentResult.error){$('#sync-status').textContent='Carga incompleta';toast('Algunos detalles no se pudieron actualizar');}
 }
 
 function render() {
@@ -288,16 +310,67 @@ async function submitPrivacyRequest(event){
   if(error){message.textContent='No fue posible registrar la solicitud.';message.className='message error';return;}message.textContent='Solicitud recibida. Conservá este mensaje como confirmación.';event.target.reset();
 }
 
-async function showSession(session){if(!session){currentOrganization=null;currentMembership=null;loginView.classList.remove('hidden');appView.classList.add('hidden');return;}const email=session.user.email.toLowerCase();const membershipResult=await client.from('monitor_organization_members').select('organization_id,display_name,role').eq('email',email).eq('active',true).limit(1).maybeSingle();if(membershipResult.error||!membershipResult.data){await client.auth.signOut();$('#login-message').textContent='Este correo todavía no pertenece a una empresa activa.';$('#login-message').className='message error';return;}const organizationResult=await client.from('monitor_organizations').select('*').eq('id',membershipResult.data.organization_id).eq('active',true).single();if(organizationResult.error){await client.auth.signOut();$('#login-message').textContent='No fue posible abrir la empresa asignada.';return;}currentMembership=membershipResult.data;currentOrganization=organizationResult.data;const isManager=['owner','admin'].includes(currentMembership.role),canEdit=isManager||currentMembership.role==='agent';$('#organization-name').textContent=currentOrganization.name;$('#organization-plan').textContent=`Plan ${currentOrganization.plan} · ${currentMembership.role} · hasta ${currentOrganization.max_cases} expedientes`;$('#user-greeting').textContent=`Buenos días, ${currentMembership.display_name}`;$('#export-btn').classList.toggle('hidden',!isManager);$('#import-btn').classList.toggle('hidden',!isManager);$('#open-add').classList.toggle('hidden',!canEdit);loginView.classList.add('hidden');appView.classList.remove('hidden');await loadData();}
+async function loadPlatform(){
+  if(!isPlatformAdmin)return;
+  const [organizations,members,invites]=await Promise.all([readRows('monitor_organizations'),readRows('monitor_organization_members'),readRows('monitor_member_invites')]);
+  if(organizations.error||members.error||invites.error){toast('No se pudieron actualizar las empresas y accesos');return;}
+  platformManager.render(organizations.data,members.data,invites.data);
+}
+async function openAdminView(view){
+  if(view==='platform'&&!isPlatformAdmin)return;
+  currentAdminView=view;
+  $('#admin-summary').classList.toggle('hidden',!['summary','cases'].includes(view)||!currentOrganization);
+  $('#operations-reports').classList.toggle('hidden',view!=='reports'||!currentOrganization);
+  $('#platform-admin').classList.toggle('hidden',view!=='platform');
+  document.querySelectorAll('[data-admin-view]').forEach(button=>{const selected=button.dataset.adminView===view;button.classList.toggle('selected',selected);if(selected)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
+  if(view==='platform')await loadPlatform();else if(view==='reports')operationsReports.render();else if(view==='cases')$('#watch-list').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function clearCompanyData(){
+  loadSequence++;watches=[];events=[];notes=[];tasks=[];documents=[];caseProfiles=[];consents=[];privacyRequests=[];auditEvents=[];currentWatchId=null;
+  $('#detail-dialog').close();$('#add-dialog').close();closeClientPreview();caseManager.close();render();
+}
+async function selectOrganization(id){
+  const org=sessionOrganizations.find(o=>o.id===id&&o.active);if(!org)return;
+  const member=sessionMemberships.find(m=>m.organization_id===id&&m.active);
+  if(!isPlatformAdmin&&!member)return;
+  clearCompanyData();currentOrganization=org;currentMembership=isPlatformAdmin?{organization_id:id,role:'owner',display_name:'Johan',active:true}:member;
+  localStorage.setItem('bonoalerta-current-organization',id);$('#organization-picker').value=id;
+  const manager=['owner','admin'].includes(currentMembership.role);
+  $('#organization-name').textContent=org.name;$('#organization-plan').textContent=`${isPlatformAdmin?'Superadministrador · ':''}Plan ${org.plan} · ${isPlatformAdmin?'Acceso global':currentMembership.role} · hasta ${org.max_cases} expedientes`;
+  $('#user-greeting').textContent=`Buenos días, ${currentMembership.display_name}`;
+  $('#export-btn').classList.toggle('hidden',!manager);$('#import-btn').classList.toggle('hidden',!manager);$('#open-add').classList.toggle('hidden',!canEditCases());
+  if(!['summary','cases','reports','platform'].includes(currentAdminView))currentAdminView='summary';await openAdminView(currentAdminView);await loadData();
+}
+let sessionSequence=0;
+async function showSession(session){
+  const sequence=++sessionSequence;
+  if(!session){sessionUser=null;currentOrganization=null;currentMembership=null;isPlatformAdmin=false;sessionOrganizations=[];sessionMemberships=[];currentAdminView='summary';clearCompanyData();platformManager.render([],[],[]);$('#platform-admin').classList.add('hidden');$('#platform-navigation').classList.add('hidden');loginView.classList.remove('hidden');appView.classList.add('hidden');return;}
+  sessionUser=session.user;const email=session.user.email?.toLowerCase();
+  const [platform,members,organizations]=await Promise.all([client.rpc('platform_access'),readRows('monitor_organization_members','*',q=>q.eq('email',email).eq('active',true)),readRows('monitor_organizations')]);
+  if(sequence!==sessionSequence)return;
+  isPlatformAdmin=!platform.error&&platform.data===true;
+  if(!isPlatformAdmin){platformManager.render([],[],[]);$('#platform-admin').classList.add('hidden');if(currentAdminView==='platform')currentAdminView='summary';}
+  if(members.error||organizations.error){$('#login-message').textContent='No fue posible cargar los accesos. Volvé a intentar.';$('#login-message').className='message error';return;}
+  sessionMemberships=members.data||[];sessionOrganizations=(organizations.data||[]).filter(org=>isPlatformAdmin||sessionMemberships.some(m=>m.organization_id===org.id));
+  const active=sessionOrganizations.filter(org=>org.active);
+  if(!isPlatformAdmin&&!active.length){currentOrganization=null;currentMembership=null;clearCompanyData();appView.classList.add('hidden');loginView.classList.remove('hidden');$('#login-message').textContent='Tu correo está verificado, pero todavía no tiene acceso a una empresa activa. Solicitá la asignación al superadministrador.';$('#login-message').className='message error';await client.auth.signOut();return;}
+  $('#platform-navigation').classList.toggle('hidden',!isPlatformAdmin);
+  $('#organization-picker').innerHTML=active.map(org=>`<option value="${escapeHtml(org.id)}">${escapeHtml(org.name)}</option>`).join('');
+  $('#organization-picker-label').classList.toggle('hidden',active.length<2&&!isPlatformAdmin);
+  loginView.classList.add('hidden');appView.classList.remove('hidden');
+  const selected=active.find(org=>org.slug===authParams.get('empresa'))||active.find(org=>org.id===currentOrganization?.id)||active.find(org=>org.id===localStorage.getItem('bonoalerta-current-organization'))||active[0];
+  if(selected)await selectOrganization(selected.id);else{currentOrganization=null;currentMembership=null;clearCompanyData();$('#organization-name').textContent='BonoAlerta';$('#organization-plan').textContent='Superadministrador';await openAdminView('platform');}
+  if(!activationHandled&&(activationMode||sessionStorage.getItem('bonoalerta-activation')===email)){activationHandled=true;$('#password-message').textContent='Tu acceso está verificado. Elegí tu contraseña para los próximos ingresos.';$('#password-dialog').showModal();}
+}
 
-$('#login-form').addEventListener('submit',signIn);$('#reset-password-btn').onclick=requestPasswordReset;$('#magic-link-btn').onclick=requestMagicLink;$('#password-form').addEventListener('submit',saveNewPassword); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=loadData; $('#logout-btn').onclick=()=>client.auth.signOut(); $('#search').addEventListener('input',e=>renderWatches(e.target.value));
+$('#login-form').addEventListener('submit',signIn);$('#reset-password-btn').onclick=requestPasswordReset;$('#magic-link-btn').onclick=()=>requestMagicLink(false);$('#activate-access-btn').onclick=()=>requestMagicLink(true);$('#organization-picker').onchange=event=>selectOrganization(event.target.value);$('#password-form').addEventListener('submit',saveNewPassword); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=()=>currentAdminView==='platform'?loadPlatform():loadData(); $('#logout-btn').onclick=()=>client.auth.signOut(); $('#search').addEventListener('input',e=>renderWatches(e.target.value));
 $('#export-btn').onclick=exportExcel;
 ['#status-filter','#priority-filter','#emitted-filter','#deadline-filter','#modality-filter','#stage-filter','#case-sort'].forEach(selector=>$(selector).onchange=()=>renderWatches($('#search').value));
 $('#new-modality').innerHTML=BonoCase.modalities.map(m=>`<option value="${m.id}">${escapeHtml(m.label)}</option>`).join('');
 $('#modality-filter').innerHTML='<option value="">Todas las modalidades</option>'+$('#new-modality').innerHTML;
 $('#stage-filter').innerHTML='<option value="">Todas las etapas internas</option>'+BonoCase.stages.map(s=>`<option value="${s.id}">${escapeHtml(s.label)}</option>`).join('');
 $('#client-education').innerHTML=BonoReports.educationHtml();
-document.querySelectorAll('[data-admin-view]').forEach(button=>button.onclick=()=>{const report=button.dataset.adminView==='reports';$('#admin-summary').classList.toggle('hidden',report);$('#operations-reports').classList.toggle('hidden',!report);document.querySelectorAll('[data-admin-view]').forEach(b=>{b.classList.toggle('selected',b===button);if(b===button)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});if(report)operationsReports.render();else if(button.dataset.adminView==='cases')$('#watch-list').scrollIntoView({behavior:'smooth',block:'start'});});
+document.querySelectorAll('[data-admin-view]').forEach(button=>button.onclick=()=>openAdminView(button.dataset.adminView));
 $('#print-case').onclick=()=>{const w=watches.find(w=>w.id===currentWatchId);if(w)BonoReports.printCase(w,profileFor(w)||{},notes,documents,tasks);};
 $('#import-btn').onclick=()=>$('#import-file').click();$('#import-file').onchange=event=>{const file=event.target.files[0];if(file)importCsv(file);event.target.value='';};
 $('#save-management').onclick=saveManagement;$('#send-client-access').onclick=sendClientAccess;$('#note-form').addEventListener('submit',addNote);$('#task-form').addEventListener('submit',addTask);$('#document-form').addEventListener('submit',uploadDocument);
@@ -305,6 +378,8 @@ $('#open-client-preview').onclick=openClientPreview;$('#close-client-preview').o
 const routeParams=new URLSearchParams(location.search);
 const clientMode=Boolean(routeParams.get('cliente'));
 const adminMode=routeParams.get('admin')==='1';
+function renderAuthMode(){const active=activationMode;$('#auth-description').textContent=active?'Verificá el correo al que el superadministrador asignó tu empresa. Después podrás elegir una contraseña.':'Ingresá a la empresa que te asignó el administrador.';$('#password').required=!active;$('#password').classList.toggle('hidden',active);document.querySelector('label[for="password"]').classList.toggle('hidden',active);$('#login-form button[type="submit"]').textContent=active?'Verificar correo y activar acceso':'Ingresar →';$('#activate-access-btn').classList.toggle('hidden',active);}
+renderAuthMode();
 const demoContent=$('#demo-preview-content');
 if(demoContent){
   const demoSummary=demoContent.innerHTML;

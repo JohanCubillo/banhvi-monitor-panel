@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="styles.css?v=20261028">
   <link rel="stylesheet" href="case-management.css?v=20261028">
   <link rel="stylesheet" href="operations-reports.css?v=20261028">
+  <link rel="stylesheet" href="platform-admin.css?v=20261029">
 </head>
 <body>
   <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
@@ -78,8 +79,8 @@
       <div class="auth-card">
         <div class="mark" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
         <p class="eyebrow">SEGUIMIENTO DE EXPEDIENTES</p>
-        <h1>Monitor BANHVI</h1>
-        <p class="lead">Tus consultas, estados e historial en un solo lugar.</p>
+        <h1>BonoAlerta</h1>
+        <p id="auth-description" class="lead">Ingresá a la empresa que te asignó el administrador.</p>
         <form id="login-form">
           <label for="email">Correo autorizado</label>
           <input id="email" type="email" autocomplete="email" placeholder="nombre@correo.com" required>
@@ -88,8 +89,9 @@
           <button class="primary" type="submit">Ingresar <span>→</span></button>
         </form>
         <div class="auth-options">
-          <button id="reset-password-btn" type="button">Crear o recuperar contraseña</button>
+          <button id="reset-password-btn" type="button">Recuperar contraseña</button>
           <button id="magic-link-btn" type="button">Ingresar con enlace por correo</button>
+          <button id="activate-access-btn" type="button">Activar acceso por primera vez</button>
         </div>
         <p id="login-message" class="message" role="status"></p>
         <p class="fine">Solo pueden ingresar los correos autorizados por el administrador.</p>
@@ -99,11 +101,11 @@
     <section id="app-view" class="app-shell hidden">
       <header class="topbar">
         <div class="brand"><div class="mark small"><span></span><span></span><span></span><span></span></div><div><strong id="organization-name">Monitor BANHVI</strong><small id="organization-plan">Panel de seguimiento</small></div></div>
-        <div class="top-actions"><span id="sync-status" class="sync"><i></i> Sincronizado</span><button id="refresh-btn" class="ghost">Actualizar</button><button id="logout-btn" class="ghost">Salir</button></div>
+        <div class="top-actions"><label class="organization-picker hidden" id="organization-picker-label">Empresa<select id="organization-picker" aria-label="Empresa actual"></select></label><span id="sync-status" class="sync"><i></i> Sincronizado</span><button id="refresh-btn" class="ghost">Actualizar</button><button id="logout-btn" class="ghost">Salir</button></div>
       </header>
 
       <div class="content">
-        <nav class="admin-navigation" aria-label="Panel administrativo"><button type="button" class="ghost selected" data-admin-view="summary" aria-current="page">Resumen</button><button type="button" class="ghost" data-admin-view="cases">Expedientes</button><button type="button" class="ghost" data-admin-view="reports">Reportes y alertas</button></nav>
+        <nav class="admin-navigation" aria-label="Panel administrativo"><button type="button" class="ghost selected" data-admin-view="summary" aria-current="page">Resumen</button><button type="button" class="ghost" data-admin-view="cases">Expedientes</button><button type="button" class="ghost" data-admin-view="reports">Reportes y alertas</button><button type="button" id="platform-navigation" class="ghost hidden" data-admin-view="platform">Empresas y accesos</button></nav>
         <div id="case-feature-message" class="form-note hidden" role="status"></div>
         <div id="admin-summary">
         <div class="welcome"><div><p class="eyebrow">RESUMEN GENERAL</p><h2 id="user-greeting">Buenos días</h2><p>Revisamos BANHVI cada 30 minutos, de 7:17 a. m. a 7:17 p. m.</p></div><div class="welcome-actions"><button id="import-btn" class="ghost">Importar CSV</button><button id="export-btn" class="ghost">Exportar a Excel</button><button id="open-add" class="primary compact">+ Nuevo expediente</button><input id="import-file" type="file" accept=".csv,text/csv" hidden></div></div>
@@ -133,6 +135,7 @@
         </section>
         </div>
         <section id="operations-reports" class="hidden" aria-label="Reportes operativos"></section>
+        <section id="platform-admin" class="hidden" aria-label="Empresas y accesos"></section>
       </div>
     </section>
   </main>
@@ -214,6 +217,7 @@
   <script src="case-domain.js?v=20261028"></script>
   <script src="case-management.js?v=20261028-2"></script>
   <script src="operations-reports.js?v=20261028"></script>
-  <script src="app.js?v=20261028-2"></script>
+  <script src="platform-admin.js?v=20261029"></script>
+  <script src="app.js?v=20261029-1"></script>
 </body>
 </html>
