@@ -4,6 +4,8 @@
   let settings, host, organizationContext;
   const filterDefaults = () => ({from:'',to:'',entity:'',zone:'',bonoType:'',companyState:'',dateBasis:'created'});
   const filters = filterDefaults();
+  let activeView='overview', breakdown='zone', charts=[], tableCursor=0, renderingTables=false;
+  const tableModels=new Map(),tablePages=new Map();
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   const array = value => Array.isArray(value) ? value : [];
   const domain = () => global.BonoCase || {};
@@ -24,7 +26,7 @@
   const monthLabel = key => new Intl.DateTimeFormat('es-CR',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(key+'-01T12:00:00Z'));
   const sourceLabel = intake => array(intake.sources).map(source=>`${text(source.sheet)||'Hoja'} · fila ${text(source.row)||'sin número'}`).join('; ');
   function resetContext(data) {
-    if(organizationContext!==data.organizationId){Object.assign(filters,filterDefaults());organizationContext=data.organizationId;}
+    if(organizationContext!==data.organizationId){Object.assign(filters,filterDefaults());organizationContext=data.organizationId;activeView='overview';breakdown='zone';tablePages.clear();}
   }
   const scopedWatches = data => array(data.watches).filter(w=>!data.organizationId||w.organization_id===data.organizationId);
   function profileMap(profiles) {
@@ -82,7 +84,18 @@
     return values;
   }
   function table(headers,rows,empty='Todavía no hay registros para este detalle.') {
+    if(renderingTables){const key=`report-table-${tableCursor++}`,model={headers,rows,empty,size:headers.length<=2?5:10};tableModels.set(key,model);return pagedTable(key,model);}
     return rows.length?`<div class="br-table-wrap"><table class="br-table"><thead><tr>${headers.map(h=>`<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`:`<p class="br-empty">${esc(empty)}</p>`;
+  }
+  function pagedTable(key,model){
+    const pages=Math.max(1,Math.ceil(model.rows.length/model.size)),page=Math.min(Math.max(1,tablePages.get(key)||1),pages);tablePages.set(key,page);
+    if(!model.rows.length)return `<div data-br-table="${key}"><p class="br-empty">${esc(model.empty)}</p></div>`;
+    const start=(page-1)*model.size,end=Math.min(start+model.size,model.rows.length);
+    return `<div data-br-table="${key}"><div class="br-table-wrap"><table class="br-table"><thead><tr>${model.headers.map(h=>`<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${model.rows.slice(start,end).join('')}</tbody></table></div><div class="br-pager"><span role="status">Mostrando ${start+1}–${end} de ${model.rows.length}</span><nav aria-label="Páginas de ${esc(model.headers[0])}"><button type="button" class="ghost" data-br-page-table="${key}" data-br-page="${page-1}" ${page===1?'disabled':''}>Anterior</button><span>Página ${page} de ${pages}</span><button type="button" class="ghost" data-br-page-table="${key}" data-br-page="${page+1}" ${page===pages?'disabled':''}>Siguiente</button></nav></div></div>`;
+  }
+  function bindPagedTables(root=host){
+    root.querySelectorAll('[data-br-page-table]').forEach(button=>button.onclick=()=>{if(button.disabled)return;const key=button.dataset.brPageTable,model=tableModels.get(key);if(!model)return;tablePages.set(key,Number(button.dataset.brPage));const old=host.querySelector(`[data-br-table="${key}"]`);old.outerHTML=pagedTable(key,model);const replacement=host.querySelector(`[data-br-table="${key}"]`);bindPagedTables(replacement);replacement.querySelector('[data-br-page-table]:not(:disabled)')?.focus({preventScroll:true});});
+    root.querySelectorAll('[data-br-open]').forEach(button=>button.onclick=()=>settings.onOpen?.(button.dataset.brOpen));
   }
   function groupedTable(rows,key) {
     return table(['Grupo','Expedientes','Con pendientes','Días en etapa actual'],group(rows,key).map(([label,items])=>{
@@ -118,6 +131,78 @@
       <section class="br-intake-block"><h5>Estados de planilla y consulta automática</h5><p class="br-hint">La columna de planilla reproduce su estado y fecha de referencia; no se utiliza como aprobación ni reemplaza el historial consultado por el robot.</p>${table(['Expediente','Estado BANHVI en planilla','Fecha de referencia','Estado de empresa','Estados de la última fecha consultada','Origen'],imported.map(row=>`<tr><th scope="row">${esc(row.watch.label||'Sin nombre')}</th><td>${esc(row.intake.reported_status||'Sin registrar')}</td><td>${esc(rawDate(row.intake,'reported_status_on'))}</td><td>${esc(row.intake.company_status||'Sin registrar')}</td><td>${esc(latestConsultedState(row.watch))}</td><td>${esc(sourceLabel(row.intake)||'Sin referencia de hoja')}</td></tr>`))}</section>
       <details class="br-intake-details"><summary>Ver detalle de ingresos y datos conservados</summary>${table(['Expediente','Ingreso a entidad','Antigüedad','Zona','Tipo de bono','Teléfono','Modelo','Observaciones'],imported.map(row=>`<tr><th scope="row">${esc(row.watch.label||'Sin nombre')}</th><td>${esc(rawDate(row.intake,'submitted_on'))}</td><td>${row.submissionAge===null?'Sin fecha':row.submissionAge<0?'Fecha futura':`${row.submissionAge} días`}</td><td>${esc(row.intake.zone||'Sin registrar')}</td><td>${esc(row.intake.bono_type||'Sin registrar')}</td><td>${esc(row.intake.phone||'Sin registrar')}</td><td>${esc(row.intake.house_model||'Sin registrar')}</td><td>${esc(row.intake.observations||'')}</td></tr>`))}</details></section>`;
   }
+  const viewLabels={overview:'Resumen',intake:'Planilla',followup:'Seguimiento',detail:'Detalle'};
+  const breakdownLabels={entity:'Entidad',zone:'Zona',bonoType:'Tipo de bono',companyState:'Estado de empresa',houseModel:'Modelo de vivienda'};
+  const breakdownValue=(row,key)=>key==='entity'?row.entity:text(row.intake[({zone:'zone',bonoType:'bono_type',companyState:'company_status',houseModel:'house_model'})[key]])||'Sin registrar';
+  function disclosure(node,title,open=false){
+    const element=document.createElement('details');element.className='br-disclosure';element.open=open;
+    const heading=node.querySelector('h4,h5'),model=tableModels.get(node.querySelector('[data-br-table]')?.dataset.brTable);
+    const summary=document.createElement('summary');summary.textContent=title||heading?.textContent||'Ver detalle';
+    if(model)summary.textContent+=` · ${model.rows.length} registros`;
+    element.append(summary,node);return element;
+  }
+  function wrapDisclosure(node,title){const parent=node.parentNode,next=node.nextSibling,wrapper=disclosure(node,title);parent.insertBefore(wrapper,next);return wrapper;}
+  function layoutReports(rows){
+    const report=host.querySelector('.br-report'),children=[...report.children],nav=document.createElement('nav'),panels={};
+    nav.className='br-view-tabs';nav.setAttribute('role','tablist');nav.setAttribute('aria-label','Vistas de reportes');
+    nav.innerHTML=Object.entries(viewLabels).map(([key,label])=>`<button type="button" role="tab" id="br-tab-${key}" data-br-view="${key}" aria-controls="br-panel-${key}">${label}</button>`).join('');
+    for(const key of Object.keys(viewLabels)){const panel=document.createElement('div');panel.id=`br-panel-${key}`;panel.className='br-view-panel';panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby',`br-tab-${key}`);panels[key]=panel;}
+    report.querySelector('.br-kpis').after(nav,...Object.values(panels));
+    for(const node of children){
+      if(node.matches('[data-br-intake]')){panels.intake.append(node);continue;}
+      if(!node.matches('.br-grid,.br-section'))continue;
+      const title=node.querySelector('h4')?.textContent||'';
+      if(/Cartera por|Tiempo real|Seguimiento por entidad|Carga por responsable|Cambios y correos/.test(title))panels.overview.append(disclosure(node,title));
+      else panels.followup.append(disclosure(node,title));
+    }
+    const overviewCharts=document.createElement('div');overviewCharts.className='br-chart-grid';overviewCharts.dataset.brCharts='overview';panels.overview.prepend(overviewCharts);
+    const intake=panels.intake.querySelector('[data-br-intake]');
+    if(intake){
+      const area=document.createElement('div');area.className='br-chart-grid';area.dataset.brCharts='intake';intake.querySelector('.br-intake-metrics').after(area);
+      const grids=[...intake.children].filter(child=>child.matches('.br-grid'));
+      const monthly=grids.find(child=>!child.matches('.br-intake-breakdowns'));if(monthly)wrapDisclosure(monthly,'Ver detalle de ingresos y antigüedad');
+      const groups=intake.querySelector('.br-intake-breakdowns');
+      if(groups){
+        const keys=['entity','zone','bonoType','companyState','houseModel'];[...groups.children].forEach((child,index)=>{child.dataset.brBreakdown=keys[index];child.hidden=keys[index]!==breakdown;});
+        const tools=document.createElement('div');tools.className='br-breakdown-tools';tools.innerHTML=`<label>Distribución de la planilla<select data-br-breakdown-select>${Object.entries(breakdownLabels).map(([key,label])=>`<option value="${key}" ${key===breakdown?'selected':''}>${label}</option>`).join('')}</select></label><p>Elegí una agrupación para ver sus categorías y cantidades.</p>`;groups.before(tools);
+        tools.querySelector('select').onchange=event=>{breakdown=event.target.value;groups.querySelectorAll('[data-br-breakdown]').forEach(child=>{child.hidden=child.dataset.brBreakdown!==breakdown;});drawCharts(rows);};
+      }
+      [...intake.children].filter(child=>child.matches('.br-intake-block')).forEach(child=>wrapDisclosure(child));
+    }
+    const followups=[...panels.followup.children];let first=true;
+    followups.forEach(element=>{element.name='br-followup';const hasRows=!!element.querySelector('tbody tr');if(first&&hasRows){element.open=true;first=false;}element.addEventListener('toggle',()=>{if(element.open)followups.filter(other=>other!==element).forEach(other=>{other.open=false;});});});
+    renderingTables=true;
+    const clipped=value=>{const full=String(value??'');return full.length>85?full.slice(0,82)+'…':full;};
+    panels.detail.innerHTML=`<section class="br-section"><h4>Detalle de expedientes</h4><p class="br-hint">La tabla usa los filtros de arriba. La exportación incluye toda la selección, independientemente de la página visible.</p>${table(['Expediente','Cédula','Entidad','Estado de empresa (planilla)','Consulta automática','Acción'],rows.map(row=>`<tr><th scope="row">${esc(row.watch.label||'Sin nombre')}</th><td>${esc(row.watch.cedula)}</td><td>${esc(row.entity)}</td><td title="${esc(row.intake.company_status||'')}">${esc(clipped(row.intake.company_status||'Sin registrar'))}</td><td title="${esc(latestConsultedState(row.watch))}">${esc(clipped(latestConsultedState(row.watch)))}</td><td><button type="button" class="br-text-button" data-br-open="${esc(row.watch.id)}">Ver expediente</button></td></tr>`))}</section>`;
+    renderingTables=false;
+    function activate(key,redraw=true){activeView=key;for(const [id,panel] of Object.entries(panels))panel.hidden=id!==key;nav.querySelectorAll('[data-br-view]').forEach(button=>{const selected=button.dataset.brView===key;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;});if(redraw)drawCharts(rows);}
+    nav.querySelectorAll('[data-br-view]').forEach(button=>button.onclick=()=>activate(button.dataset.brView));
+    nav.addEventListener('keydown',event=>{const buttons=[...nav.querySelectorAll('button')],index=buttons.indexOf(document.activeElement);if(index<0)return;let next;if(event.key==='ArrowRight')next=(index+1)%buttons.length;else if(event.key==='ArrowLeft')next=(index+buttons.length-1)%buttons.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=buttons.length-1;else return;event.preventDefault();buttons[next].click();buttons[next].focus();});
+    activate(Object.hasOwn(panels,activeView)?activeView:'overview',false);
+  }
+  function chartCard(area,title,labels,values,type='bar',horizontal=false,description=''){
+    const figure=document.createElement('figure');figure.className='br-chart-card';
+    const count=values.reduce((sum,value)=>sum+value,0);figure.innerHTML=`<figcaption><h4>${esc(title)}</h4><p>${esc(description||`${count} expedientes en la selección`)}</p></figcaption><div class="br-chart-canvas"><canvas role="img" aria-label="${esc(title)}. ${esc(labels.map((label,index)=>`${label}: ${values[index]}`).join('; '))}"></canvas></div><p class="br-chart-summary">${esc(labels.map((label,index)=>`${label}: ${values[index]}`).join(' · '))||'Sin datos para este gráfico.'}</p>`;area.append(figure);
+    if(!global.Chart){const note=document.createElement('p');note.className='br-hint';note.textContent='El gráfico no está disponible. Podés consultar los valores y las tablas de detalle.';figure.querySelector('.br-chart-canvas').replaceWith(note);return;}
+    if(!count){figure.querySelector('.br-chart-canvas').innerHTML='<p class="br-empty">Sin datos para este gráfico.</p>';return;}
+    const colors=['#138c78','#0b4652','#76b9a9','#dbac43','#577f91','#c27b56','#91aa79','#7499b4','#b9c8c1'];
+    try{
+      const config={type,data:{labels,datasets:[{label:'Expedientes',data:values,backgroundColor:type==='doughnut'?colors:labels.map((_,i)=>colors[i%colors.length]),borderWidth:0,borderRadius:type==='bar'?5:0}]},options:{responsive:true,maintainAspectRatio:false,animation:false,indexAxis:horizontal?'y':'x',plugins:{legend:{display:type==='doughnut',position:'bottom',labels:{boxWidth:10,font:{size:11}}},tooltip:{callbacks:{title:items=>items[0]?.label||''}}},scales:type==='doughnut'?{}:horizontal?{x:{beginAtZero:true,ticks:{precision:0,font:{size:10}}},y:{ticks:{font:{size:10},callback:function(value){const label=String(this.getLabelForValue(value));return label.length>28?label.slice(0,25)+'…':label;}}}}:{x:{ticks:{font:{size:10},maxRotation:0,maxTicksLimit:7}},y:{beginAtZero:true,ticks:{precision:0,font:{size:10}}}}}};
+      charts.push(new global.Chart(figure.querySelector('canvas'),config));
+    }catch{figure.querySelector('.br-chart-canvas').innerHTML='<p class="br-empty">Consultá los valores en el detalle.</p>';}
+  }
+  function topSeries(rows,key){const grouped=group(rows,key),top=grouped.slice(0,8);if(grouped.length>8)top.push(['Otros (agrupados)',grouped.slice(8).flatMap(([,items])=>items)]);return{labels:top.map(([label])=>label),values:top.map(([,items])=>items.length),description:grouped.length>8?'8 categorías principales y el resto agrupado. El detalle conserva todas las categorías.':''};}
+  function drawCharts(rows){
+    charts.forEach(chart=>chart.destroy());charts=[];host.querySelectorAll('[data-br-charts]').forEach(area=>{area.innerHTML='';});
+    if(activeView==='overview'){
+      const area=host.querySelector('[data-br-charts="overview"]'),stages=topSeries(rows,row=>stageLabel(row.profile.workflow_stage)),entities=topSeries(rows,row=>row.entity);
+      chartCard(area,'Cartera por etapa interna',stages.labels,stages.values,'doughnut',false,stages.description);chartCard(area,'Distribución por entidad',entities.labels,entities.values,'bar',true,entities.description);
+    }else if(activeView==='intake'){
+      const area=host.querySelector('[data-br-charts="intake"]'),imported=rows.filter(hasIntake),dated=imported.filter(row=>day(row.intake.submitted_on)!==null),months=group(dated,row=>row.intake.submitted_on.slice(0,7)).sort((a,b)=>a[0].localeCompare(b[0]));
+      chartCard(area,'Ingresos informados por mes',months.map(([key])=>monthLabel(key)),months.map(([,items])=>items.length),'bar',false,`${dated.length} con fecha válida · ${imported.length-dated.length} sin fecha válida. Según la planilla.`);
+      const series=topSeries(imported,row=>breakdownValue(row,breakdown));chartCard(area,`Por ${breakdownLabels[breakdown].toLocaleLowerCase()}`,series.labels,series.values,'bar',true,series.description);
+    }
+  }
   function filterOptions(values,current,emptyLabel) {
     return `<option value="">${esc(emptyLabel)}</option>`+[...new Set(values.map(text).filter(Boolean))].sort().map(value=>`<option value="${esc(value)}" ${current===value?'selected':''}>${esc(value)}</option>`).join('');
   }
@@ -127,6 +212,7 @@
   function render() {
     if(!host||!settings)return;
     const rows=getRows(), all=settings.getData()||{}, profiles=profileMap(all.profiles), allIntakes=scopedWatches(all).map(w=>intakeOf(profiles.get(w.id))),entities=[...new Set(scopedWatches(all).map(w=>profiles.get(w.id)?.financial_entity||'Sin entidad'))].sort();
+    charts.forEach(chart=>chart.destroy());charts=[];tableModels.clear();tableCursor=0;renderingTables=true;
     const totalDocs=rows.reduce((a,r)=>a+r.docs.total,0), completeDocs=rows.reduce((a,r)=>a+r.docs.complete,0), duration=stageDurations(rows);
     const average=duration.length?`${(duration.reduce((a,r)=>a+r.days,0)/duration.length).toFixed(1)} días`:'Sin historial';
     const urgent=rows.filter(r=>r.issues.some(i=>i.kind==='danger')), near=rows.filter(r=>r.deadline&&!r.deadline.completed&&r.deadline.days<=30);
@@ -151,9 +237,10 @@
       <section class="br-section"><h4>Próximas acciones y alertas</h4>${table(['Expediente','Etapa','Pendientes','Responsable','Acción'],overdue.map(r=>`<tr><th scope="row">${esc(r.watch.label||'Sin nombre')}</th><td>${esc(stageLabel(r.profile.workflow_stage))}</td><td>${r.issues.map(i=>`<span class="br-tag ${i.kind}">${esc(i.text)}</span>`).join(' ')}</td><td>${esc(r.responsible)}</td><td><button type="button" class="br-text-button" data-br-open="${esc(r.watch.id)}">Gestionar</button></td></tr>`),'No hay pendientes operativos en la selección.')}</section>
       <section class="br-section"><h4>Construcción e inspecciones</h4>${table(['Expediente','Avance registrado','Presupuesto aprobado','Desembolsado','Inspecciones','Acción'],rows.filter(r=>r.profile.workflow_stage==='construction'||array(r.profile.construction?.inspections).length).map(r=>{const c=r.profile.construction||{};return `<tr><th scope="row">${esc(r.watch.label||'Sin nombre')}</th><td>${Math.min(100,Math.max(0,Number(c.progress)||0))}%</td><td>${esc(money(c.approved_budget))}</td><td>${esc(money(array(c.disbursements).reduce((a,v)=>a+(Number(v.amount)||0),0)))}</td><td>${array(c.inspections).length}</td><td><button type="button" class="br-text-button" data-br-open="${esc(r.watch.id)}">Ver obra</button></td></tr>`;}),'Todavía no hay obras o inspecciones registradas.')}</section>
       <p class="br-hint">Etapas, fechas y avances internos son registros de su empresa. Los estados BANHVI se conservan por separado.</p></div>`;
-    host.querySelector('[data-br-filters]').onsubmit=event=>{event.preventDefault();captureFilters(event.currentTarget);render();};
-    host.querySelector('[name="dateBasis"]').onchange=event=>{captureFilters(event.target.form);render();};
-    host.querySelector('[data-br-reset]').onclick=()=>{Object.assign(filters,filterDefaults());render();};
+    renderingTables=false;layoutReports(rows);bindPagedTables();drawCharts(rows);
+    host.querySelector('[data-br-filters]').onsubmit=event=>{event.preventDefault();tablePages.clear();captureFilters(event.currentTarget);render();};
+    host.querySelector('[name="dateBasis"]').onchange=event=>{tablePages.clear();captureFilters(event.target.form);render();};
+    host.querySelector('[data-br-reset]').onclick=()=>{Object.assign(filters,filterDefaults());tablePages.clear();render();};
     host.querySelectorAll('[data-br-open]').forEach(button=>button.onclick=()=>settings.onOpen?.(button.dataset.brOpen));
     const exportButton=host.querySelector('[data-br-export]');if(exportButton)exportButton.onclick=exportCsv;
     const excelButton=host.querySelector('[data-br-excel]');if(excelButton)excelButton.onclick=exportExcel;

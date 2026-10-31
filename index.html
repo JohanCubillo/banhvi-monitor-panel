@@ -10,9 +10,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261028">
+  <link rel="stylesheet" href="styles.css?v=20261031-2">
   <link rel="stylesheet" href="case-management.css?v=20261031">
-  <link rel="stylesheet" href="operations-reports.css?v=20261031">
+  <link rel="stylesheet" href="operations-reports.css?v=20261031-2">
   <link rel="stylesheet" href="workbook-import.css?v=20261031">
   <link rel="stylesheet" href="platform-admin.css?v=20261029">
 </head>
@@ -123,11 +123,13 @@
           <div class="panel-head"><div><h3>Expedientes monitoreados</h3><p>Estado más reciente de cada consulta.</p></div><div class="filters"><div class="search-wrap"><input id="search" type="search" placeholder="Buscar nombre, cédula, caso o EMITIDO"></div><select id="emitted-filter" aria-label="Filtrar por estado emitido"><option value="">Todos los expedientes</option><option value="yes">Con EMITIDO</option><option value="no">Sin EMITIDO</option></select><select id="deadline-filter" aria-label="Filtrar por días restantes"><option value="">Cualquier plazo</option><option value="expired">Plazo vencido</option><option value="0-5">Faltan 0–5 días</option><option value="6-10">Faltan 6–10 días</option><option value="11-30">Faltan 11–30 días</option><option value="31+">Faltan más de 30 días</option></select><select id="priority-filter" aria-label="Filtrar por prioridad"><option value="">Toda prioridad</option><option value="urgent">Urgente</option><option value="high">Alta</option><option value="normal">Normal</option><option value="low">Baja</option></select><select id="status-filter" aria-label="Filtrar por semáforo"><option value="">Cualquier atención</option><option value="red">Requieren atención</option><option value="yellow">Próximos a vencer</option><option value="green">Al día</option></select></div></div>
           <div class="case-extra-filters"><select id="modality-filter" aria-label="Modalidad"></select><select id="stage-filter" aria-label="Etapa interna"></select><select id="case-sort" aria-label="Ordenar expedientes"><option value="created">Más recientes</option><option value="deadline">Prioridad por meta de emitidos</option></select></div>
           <div id="watch-list" class="watch-list"><div class="empty">Cargando expedientes…</div></div>
+          <div id="watch-pagination"></div>
         </section>
 
         <section class="panel timeline-panel">
           <div class="panel-head"><div><h3>Actividad reciente</h3><p>Cambios y notificaciones registrados.</p></div></div>
           <div id="activity-list" class="activity-list"><div class="empty">Sin actividad reciente.</div></div>
+          <div id="activity-pagination"></div>
         </section>
 
         <section id="compliance-panel" class="panel hidden">
@@ -221,8 +223,9 @@
   <script src="workbook-import.js?v=20261031"></script>
   <script src="case-domain.js?v=20261031"></script>
   <script src="case-management.js?v=20261031"></script>
-  <script src="operations-reports.js?v=20261031"></script>
+  <script src="vendor/chart-4.6.1.umd.min.js"></script>
+  <script src="operations-reports.js?v=20261031-2"></script>
   <script src="platform-admin.js?v=20261029-2"></script>
-  <script src="app.js?v=20261031"></script>
+  <script src="app.js?v=20261031-2"></script>
 </body>
 </html>

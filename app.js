@@ -32,6 +32,8 @@ let sessionMemberships = [];
 let sessionUser = null;
 let currentAdminView = 'summary';
 let loadSequence = 0;
+const watchPagination = {page:1,pageSize:10,criteria:''};
+const activityPagination = {page:1,pageSize:10};
 let activationHandled = false;
 let activationVerificationAccepted = false;
 let passwordOwner = null;
@@ -193,14 +195,31 @@ function renderCompliance(){
   $('#privacy-request-list').innerHTML=pending.length?pending.map(r=>`<div class="activity"><span class="activity-dot"></span><div><p><strong>${escapeHtml(r.request_type)}</strong> · ${escapeHtml(r.email)}</p><small>${escapeHtml(r.details||'Sin detalle')}</small></div><small>${escapeHtml(formatDate(r.created_at))}</small></div>`).join(''):'<div class="empty">Sin solicitudes pendientes.</div>';
 }
 
+function paginationRange(state,total){
+  const pages=Math.max(1,Math.ceil(total/state.pageSize));state.page=Math.min(Math.max(1,state.page),pages);
+  return{pages,start:(state.page-1)*state.pageSize,end:Math.min(state.page*state.pageSize,total)};
+}
+function renderPagination(selector,state,total,onChange,{label,pageSizes=false}={}){
+  const container=$(selector);if(!container)return;
+  if(!total){container.innerHTML='';return;}
+  const range=paginationRange(state,total),numbers=range.pages<=5?Array.from({length:range.pages},(_,index)=>index+1):[...new Set([1,...[state.page-1,state.page,state.page+1].filter(page=>page>1&&page<range.pages),range.pages])].sort((a,b)=>a-b);
+  const pageButtons=numbers.map((page,index)=>`${index&&page-numbers[index-1]>1?'<span class="list-pagination-gap" aria-hidden="true">…</span>':''}<button type="button" data-pagination-page="${page}" aria-label="Ir a página ${page} de ${escapeHtml(label)}" ${state.page===page?'aria-current="page"':''}>${page}</button>`).join('');
+  container.innerHTML=`<div class="list-pagination"><span class="list-pagination-summary" data-pagination-summary role="status" aria-live="polite" aria-atomic="true">Mostrando ${range.start+1}–${range.end} de ${total}</span>${pageSizes?`<label class="list-pagination-size"><span>Por página</span><select data-pagination-size aria-label="${escapeHtml(label)} por página">${[10,25,50].map(size=>`<option value="${size}" ${state.pageSize===size?'selected':''}>${size}</option>`).join('')}</select></label>`:''}<nav aria-label="Paginación de ${escapeHtml(label)}"><button type="button" data-pagination-prev data-pagination-page="${state.page-1}" ${state.page===1?'disabled':''}>Anterior</button><div class="list-pagination-numbers">${pageButtons}</div><button type="button" data-pagination-next data-pagination-page="${state.page+1}" ${state.page===range.pages?'disabled':''}>Siguiente</button></nav></div>`;
+  container.querySelectorAll('[data-pagination-page]').forEach(button=>button.onclick=()=>{if(button.disabled)return;state.page=Number(button.dataset.paginationPage);onChange();container.querySelector('[aria-current="page"]')?.focus({preventScroll:true});});
+  const size=container.querySelector('[data-pagination-size]');if(size)size.onchange=()=>{state.pageSize=Number(size.value);state.page=1;onChange();container.querySelector('[data-pagination-size]')?.focus({preventScroll:true});};
+}
+
 function renderWatches(query='') {
   const q=query.trim().toLowerCase();
   const status=$('#status-filter')?.value||'',priority=$('#priority-filter')?.value||'',emitted=$('#emitted-filter')?.value||'',deadline=$('#deadline-filter')?.value||'';
   const matchesDeadline=info=>!deadline||(!info?.completed&&((deadline==='expired'&&info?.days<0)||(deadline==='0-5'&&info?.days>=0&&info.days<=5)||(deadline==='6-10'&&info?.days>=6&&info.days<=10)||(deadline==='11-30'&&info?.days>=11&&info.days<=30)||(deadline==='31+'&&info?.days>=31)));
   const modality=$('#modality-filter').value,stage=$('#stage-filter').value;
+  const criteria=JSON.stringify([q,status,priority,emitted,deadline,modality,stage,$('#case-sort').value]);
+  if(watchPagination.criteria!==criteria){watchPagination.page=1;watchPagination.criteria=criteria;}
   const rows=watches.filter(w=>{const info=formalizationInfo(w),p=profileFor(w),searchValues=[w.label,w.cedula,w.case_number,w.assigned_to,p?.financial_entity,latestState(w.last_states),info?'emitido':'',info?.elapsed,info?.days];return searchValues.some(v=>String(v??'').toLowerCase().includes(q));}).filter(w=>!status||trafficStatus(w)===status).filter(w=>!priority||w.priority===priority).filter(w=>!modality||profileFor(w)?.modality===modality).filter(w=>!stage||profileFor(w)?.workflow_stage===stage).filter(w=>{const info=formalizationInfo(w);return(!emitted||(emitted==='yes'&&info)||(emitted==='no'&&!info))&&matchesDeadline(info);});
   if($('#case-sort').value==='deadline')rows.sort((a,b)=>{const x=formalizationInfo(a),y=formalizationInfo(b);return (x&&!x.completed?x.days:Infinity)-(y&&!y.completed?y.days:Infinity);});
-  $('#watch-list').innerHTML=rows.length?rows.map(w=>`<article class="watch-row ${trafficStatus(w)==='red'?'attention':trafficStatus(w)==='yellow'?'near-due':''}">
+  const pageRange=paginationRange(watchPagination,rows.length),pageRows=rows.slice(pageRange.start,pageRange.end);
+  $('#watch-list').innerHTML=rows.length?pageRows.map(w=>`<article class="watch-row ${trafficStatus(w)==='red'?'attention':trafficStatus(w)==='yellow'?'near-due':''}">
     <div class="watch-name"><div class="watch-icon">${escapeHtml((w.label||'E').slice(0,1).toUpperCase())}</div><div><strong><span class="traffic ${trafficStatus(w)}"></span>${escapeHtml(w.label||'Sin nombre')}</strong><small>Cédula ${escapeHtml(w.cedula)}</small><span class="priority">${escapeHtml(w.priority||'normal')} · ${escapeHtml(w.assigned_to||'Sin responsable')}</span></div></div>
     <div class="cell"><span class="cell-label">Caso BANHVI</span><strong>${w.case_number?`#${escapeHtml(w.case_number)}`:'Pendiente'}</strong><small>${escapeHtml(BonoCase.stages.find(s=>s.id===profileFor(w)?.workflow_stage)?.label||'Gestión por configurar')}</small></div>
     <div class="cell"><span class="cell-label">Estado actual</span><strong>${escapeHtml(latestState(w.last_states))}</strong><small>${escapeHtml(formatDate(w.last_success_at))}</small>${formalizationRowHtml(w)}${profileFor(w)?`<small>Documentación: ${BonoCase.checklistStats(profileFor(w).checklist).percent}% completa</small>`:''}</div>
@@ -209,10 +228,13 @@ function renderWatches(query='') {
   </article>`).join(''):'<div class="empty">No encontramos expedientes.</div>';
   document.querySelectorAll('[data-detail]').forEach(b=>b.onclick=()=>openDetail(b.dataset.detail));
   document.querySelectorAll('[data-toggle]').forEach(b=>b.onclick=()=>toggleWatch(b.dataset.toggle));
+  renderPagination('#watch-pagination',watchPagination,rows.length,()=>renderWatches($('#search').value),{label:'expedientes',pageSizes:true});
 }
 
 function renderActivity(){
-  $('#activity-list').innerHTML=events.length?events.map(e=>{const w=watches.find(x=>x.id===e.watch_id);return `<div class="activity"><span class="activity-dot"></span><div><p><strong>${escapeHtml(w?.label||'Expediente')}</strong> registró un cambio de estado.</p><small>${e.status==='sent'?'Correo enviado':e.status==='review_required'?'Requiere revisión':'Notificación pendiente'}</small></div><small>${escapeHtml(formatDate(e.created_at))}</small></div>`}).join(''):'<div class="empty">Todavía no hay cambios nuevos. Todo permanece estable.</div>';
+  const range=paginationRange(activityPagination,events.length),pageEvents=events.slice(range.start,range.end);
+  $('#activity-list').innerHTML=events.length?pageEvents.map(e=>{const w=watches.find(x=>x.id===e.watch_id);return `<div class="activity"><span class="activity-dot"></span><div><p><strong>${escapeHtml(w?.label||'Expediente')}</strong> registró un cambio de estado.</p><small>${e.status==='sent'?'Correo enviado':e.status==='review_required'?'Requiere revisión':'Notificación pendiente'}</small></div><small>${escapeHtml(formatDate(e.created_at))}</small></div>`}).join(''):'<div class="empty">Todavía no hay cambios nuevos. Todo permanece estable.</div>';
+  renderPagination('#activity-pagination',activityPagination,events.length,renderActivity,{label:'actividad reciente'});
 }
 
 function stateDifference(before=[], after=[]) {
@@ -356,6 +378,7 @@ async function openAdminView(view){
   if(view==='platform')await loadPlatform();else if(view==='reports')operationsReports.render();else if(view==='cases')$('#watch-list').scrollIntoView({behavior:'smooth',block:'start'});
 }
 function clearCompanyData(){
+  watchPagination.page=1;watchPagination.pageSize=10;watchPagination.criteria='';activityPagination.page=1;activityPagination.pageSize=10;
   loadSequence++;watches=[];events=[];notes=[];tasks=[];documents=[];caseProfiles=[];consents=[];privacyRequests=[];auditEvents=[];currentWatchId=null;intakeAvailable=false;workbookImporter.invalidate();
   $('#detail-dialog').close();$('#add-dialog').close();closeClientPreview();caseManager.close();render();
 }
