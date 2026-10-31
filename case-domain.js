@@ -21,7 +21,8 @@
     {id:'purchase',label:'Compra de vivienda existente',requirements:[...base,{id:'purchase_offer',label:'Opción de compra de vivienda'},{id:'appraisal',label:'Avalúo y revisión de la vivienda'}]},
     {id:'family_lot',label:'Construcción en terreno familiar',requirements:[...base,{id:'family_land',label:'Autorización y documentación del terreno familiar'},...technical]},
     {id:'ramt',label:'Reparación, ampliación o mejora (RAMT)',requirements:[...base,...technical,{id:'existing_home',label:'Diagnóstico de la vivienda existente'}]},
-    {id:'special',label:'Programa especial',requirements:[...base,...technical,{id:'special_program',label:'Documentación específica del programa'}]}
+    {id:'special',label:'Programa especial',requirements:[...base,...technical,{id:'special_program',label:'Documentación específica del programa'}]},
+    {id:'unconfirmed',label:'Modalidad por confirmar',requirements:[]}
   ];
   const stages = [
     {id:'prequalification',label:'Precalificación'}, {id:'documents',label:'Documentación'},
