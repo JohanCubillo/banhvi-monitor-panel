@@ -56,8 +56,8 @@
     const stateDates=(Array.isArray(watch.last_states)?watch.last_states:[])
       .filter(s=>String(s.description||'').trim().toUpperCase()==='EMITIDO')
       .map(s=>parseDate(s.date)).filter(d=>d!==null);
-    const override=parseDate(profile.emitted_on);
-    const start=override!==null?override:stateDates.length?Math.max(...stateDates):null;
+    // The emission date is obtained from BANHVI, never from a staff-entered override.
+    const start=stateDates.length?Math.max(...stateDates):null;
     if(start===null)return null;
     const raw=Number(profile.deadline_days??90);
     const totalDays=Number.isInteger(raw)&&raw>=1&&raw<=3650?raw:90;
