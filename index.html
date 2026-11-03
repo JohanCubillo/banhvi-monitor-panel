@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261103-check1">
+  <link rel="stylesheet" href="styles.css?v=20261103-cases1">
   <link rel="stylesheet" href="case-management.css?v=20261031-3">
   <link rel="stylesheet" href="operations-reports.css?v=20261031-2">
   <link rel="stylesheet" href="workbook-import.css?v=20261031">
@@ -187,6 +187,7 @@
   <dialog id="detail-dialog" class="detail-dialog">
     <div class="dialog-head"><div><p class="eyebrow">DETALLE DEL EXPEDIENTE</p><h3 id="detail-title">Expediente</h3></div><button type="button" class="icon-btn" id="close-detail" aria-label="Cerrar">×</button></div>
     <div id="detail-meta" class="detail-meta"></div>
+    <section id="case-choices" class="case-choices hidden" aria-label="Casos detectados en BANHVI"></section>
     <details class="manual-check-help"><summary>Consulta individual desde GitHub</summary><p>Para ejecutar solo este expediente, abrí el monitor en GitHub Actions, pulsá «Run workflow» y pegá este identificador en «watch_id». Si lo dejás vacío, hará la revisión general.</p><code id="detail-check-id"></code><p>El botón «Consultar BANHVI» de la lista lo agrega a la cola prioritaria de la próxima ejecución automática.</p></details>
     <div class="management-actions"><button id="open-client-preview" type="button" class="ghost">Vista previa del cliente</button><button id="print-case" type="button" class="ghost">Imprimir expediente / PDF</button></div><div id="internal-deadline"></div>
     <div id="integral-case-management"></div>
@@ -225,6 +226,6 @@
   <script src="vendor/chart-4.6.1.umd.min.js"></script>
   <script src="operations-reports.js?v=20261031-3"></script>
   <script src="platform-admin.js?v=20261029-2"></script>
-  <script src="app.js?v=20261103-3"></script>
+  <script src="app.js?v=20261103-4"></script>
 </body>
 </html>

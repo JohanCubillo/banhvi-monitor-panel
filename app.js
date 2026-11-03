@@ -14,6 +14,7 @@ const landingView = $('#landing-view');
 let watches = [];
 let events = [];
 let checkRequests = [];
+let caseChoices = [];
 let notes = [];
 let tasks = [];
 let documents = [];
@@ -74,7 +75,7 @@ function documentationLabel(profile){
 }
 function consultationErrorLabel(value){
   const code=String(value||'');
-  const messages={CASE_NOT_FOUND:'BANHVI no devolvió resultados para esta cédula en la última búsqueda',CASE_NOT_RESOLVED:'No se pudo abrir un caso automáticamente; requiere revisión'};
+  const messages={CASE_SELECTION_REQUIRED:'BANHVI devolvió varios casos o el caso vinculado no aparece. Abrí «Ver» para revisar',CASE_IDENTITY_CHANGED:'BANHVI abrió un caso distinto del vinculado; conservamos los estados anteriores',CASE_NOT_FOUND:'BANHVI no devolvió resultados para esta cédula en la última búsqueda',CASE_NOT_RESOLVED:'No se pudo abrir un caso automáticamente; requiere revisión'};
   return Object.hasOwn(messages,code)?`${messages[code]} (${code})`:code;
 }
 function toast(text){ const el=$('#toast'); el.textContent=text; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
@@ -159,16 +160,18 @@ async function loadData() {
   if(sequence!==loadSequence)return;
   if(watchResult.error){$('#sync-status').textContent='Error de actualización';toast('No fue posible cargar los expedientes de esta empresa');return;}
   const nextWatches=watchResult.data||[],ids=nextWatches.map(w=>w.id);
-  const [eventResult,noteResult,taskResult,documentResult,profileResult,intakeProbe,checkResult]=await Promise.all([
+  const [eventResult,noteResult,taskResult,documentResult,profileResult,intakeProbe,checkResult,choicesResult]=await Promise.all([
     readWatchRows('monitor_outbox','id,watch_id,status,created_at,sent_at,before_states,after_states',ids),
     readWatchRows('monitor_notes','*',ids),readWatchRows('monitor_tasks','*',ids),readWatchRows('monitor_documents','*',ids),
     readRows('monitor_case_profiles','*',q=>q.eq('organization_id',organizationId),'watch_id'),
     client.from('monitor_case_profiles').select('watch_id,intake_data').eq('organization_id',organizationId).limit(1),
-    readWatchRows('monitor_check_requests','watch_id,status,requested_at,completed_at,last_error',ids,'requested_at')
+    readWatchRows('monitor_check_requests','watch_id,status,requested_at,completed_at,last_error',ids,'requested_at'),
+    readWatchRows('monitor_case_choices','watch_id,case_numbers,selected_case_number,observed_at',ids,'observed_at')
   ]);
   if(sequence!==loadSequence)return;
   watches=nextWatches;events=eventResult.data||[];
   checkRequests=checkResult.data||[];
+  caseChoices=choicesResult.data||[];
   notes=noteResult.data||[];tasks=taskResult.data||[];documents=documentResult.data||[];
   caseProfiles=profileResult.data||[];caseFeaturesAvailable=!profileResult.error;
   intakeAvailable=!intakeProbe.error;
@@ -246,6 +249,28 @@ function renderWatches(query='') {
   renderPagination('#watch-pagination',watchPagination,rows.length,()=>renderWatches($('#search').value),{label:'expedientes',pageSizes:true});
 }
 
+function renderCaseChoices(w){
+  const section=$('#case-choices'),choices=caseChoices.find(c=>c.watch_id===w.id);
+  const numbers=[...new Set((Array.isArray(choices?.case_numbers)?choices.case_numbers:[]).filter(n=>/^\d{5,20}$/.test(n)))];
+  const required=w.last_error==='CASE_SELECTION_REQUIRED';
+  section.classList.toggle('hidden',!numbers.length&&!required);
+  if(!numbers.length){section.innerHTML=required?'<strong>Hay varios casos por revisar</strong><p>Para ver las opciones, activá el SQL de selección de casos y solicitá otra consulta.</p>':'';return;}
+  const linked=w.case_number||choices.selected_case_number;
+  section.innerHTML=`<strong>Casos detectados en BANHVI</strong><p>${linked?`Seguiremos el caso #${escapeHtml(linked)}. Los otros casos no se mezclan con este expediente.`:'Elegí el caso que corresponde a este expediente. La próxima consulta obtendrá únicamente sus estados.'}</p><form id="select-case-form"><label>Caso a monitorear<select id="select-case-number" required ${linked||!canEditCases()?'disabled':''}><option value="">Seleccioná un caso</option>${numbers.map(n=>`<option value="${n}" ${linked===n?'selected':''}>#${n}</option>`).join('')}</select></label>${!linked&&canEditCases()?`<button type="submit" ${!w.enabled?'disabled':''}>Elegir y solicitar consulta</button>`:''}</form><small id="case-choice-message" role="status">${!w.enabled?'Activá el monitoreo para solicitar la consulta.':''}</small>`;
+  const form=$('#select-case-form');form.onsubmit=async event=>{
+    event.preventDefault();const number=$('#select-case-number').value;if(!numbers.includes(number)||!canEditCases())return;
+    const organizationId=currentOrganization?.id,button=form.querySelector('button'),message=$('#case-choice-message');button.disabled=true;message.textContent='Guardando selección…';
+    try{
+      const {data,error}=await client.rpc('select_banhvi_case',{p_watch_id:w.id,p_case_number:number});
+      if(organizationId!==currentOrganization?.id||currentWatchId!==w.id)return;
+      if(error){message.textContent=error.message?.includes('cinco minutos')?'Esperá cinco minutos desde la última solicitud y probá de nuevo.':'No se pudo elegir el caso. Actualizá el panel para revisar sus opciones y permisos.';button.disabled=false;return;}
+      choices.selected_case_number=number;
+      checkRequests=checkRequests.filter(r=>r.watch_id!==w.id);checkRequests.push({watch_id:w.id,...data});
+      renderCaseChoices(w);renderWatches($('#search').value);toast('Caso elegido. Consulta en cola para la próxima ejecución');
+    }catch{message.textContent='No se pudo conectar. Intentá nuevamente.';button.disabled=false;}
+  };
+}
+
 async function requestWatchCheck(id,button){
   if(!canEditCases()||!watches.some(w=>w.id===id&&w.enabled))return;
   const organizationId=currentOrganization?.id;
@@ -313,6 +338,7 @@ function openDetail(id){
   $('#detail-title').textContent=w.label||'Expediente';
   $('#detail-meta').innerHTML=`<span><i class="traffic ${trafficStatus(w)}"></i>Cédula ${escapeHtml(w.cedula)}</span><span>${w.case_number?`Caso #${escapeHtml(w.case_number)}`:'Caso pendiente'}</span><span>${w.enabled?'Activo':'Pausado'}</span>`;
   $('#detail-check-id').textContent=w.id;
+  renderCaseChoices(w);
   $('#internal-deadline').innerHTML=formalizationHtml(w);
   $('#integral-case-management').classList.toggle('hidden',!caseFeaturesAvailable);
   if(caseFeaturesAvailable)caseManager.open(w,profileFor(w)||{},documents);
