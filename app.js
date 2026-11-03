@@ -13,6 +13,7 @@ const appView = $('#app-view');
 const landingView = $('#landing-view');
 let watches = [];
 let events = [];
+let checkRequests = [];
 let notes = [];
 let tasks = [];
 let documents = [];
@@ -147,8 +148,8 @@ async function readRows(table,columns='*',configure=q=>q,order='created_at'){
   const data=[];
   for(let offset=0;;offset+=500){const result=await configure(client.from(table).select(columns)).order(order,{ascending:false}).range(offset,offset+499);if(result.error)return{data:null,error:result.error};data.push(...(result.data||[]));if((result.data||[]).length<500)return{data,error:null};}
 }
-async function readWatchRows(table,columns,ids){
-  const data=[];for(let offset=0;offset<ids.length;offset+=80){const result=await readRows(table,columns,q=>q.in('watch_id',ids.slice(offset,offset+80)));if(result.error)return result;data.push(...result.data);}return{data:data.sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))),error:null};
+async function readWatchRows(table,columns,ids,order='created_at'){
+  const data=[];for(let offset=0;offset<ids.length;offset+=80){const result=await readRows(table,columns,q=>q.in('watch_id',ids.slice(offset,offset+80)),order);if(result.error)return result;data.push(...result.data);}return{data:data.sort((a,b)=>String(b[order]||'').localeCompare(String(a[order]||''))),error:null};
 }
 async function loadData() {
   if(!currentOrganization?.active)return;
@@ -158,14 +159,16 @@ async function loadData() {
   if(sequence!==loadSequence)return;
   if(watchResult.error){$('#sync-status').textContent='Error de actualización';toast('No fue posible cargar los expedientes de esta empresa');return;}
   const nextWatches=watchResult.data||[],ids=nextWatches.map(w=>w.id);
-  const [eventResult,noteResult,taskResult,documentResult,profileResult,intakeProbe]=await Promise.all([
+  const [eventResult,noteResult,taskResult,documentResult,profileResult,intakeProbe,checkResult]=await Promise.all([
     readWatchRows('monitor_outbox','id,watch_id,status,created_at,sent_at,before_states,after_states',ids),
     readWatchRows('monitor_notes','*',ids),readWatchRows('monitor_tasks','*',ids),readWatchRows('monitor_documents','*',ids),
     readRows('monitor_case_profiles','*',q=>q.eq('organization_id',organizationId),'watch_id'),
-    client.from('monitor_case_profiles').select('watch_id,intake_data').eq('organization_id',organizationId).limit(1)
+    client.from('monitor_case_profiles').select('watch_id,intake_data').eq('organization_id',organizationId).limit(1),
+    readWatchRows('monitor_check_requests','watch_id,status,requested_at,completed_at,last_error',ids,'requested_at')
   ]);
   if(sequence!==loadSequence)return;
   watches=nextWatches;events=eventResult.data||[];
+  checkRequests=checkResult.data||[];
   notes=noteResult.data||[];tasks=taskResult.data||[];documents=documentResult.data||[];
   caseProfiles=profileResult.data||[];caseFeaturesAvailable=!profileResult.error;
   intakeAvailable=!intakeProbe.error;
@@ -235,11 +238,32 @@ function renderWatches(query='') {
     <div class="cell"><span class="cell-label">Caso BANHVI</span><strong>${w.case_number?`#${escapeHtml(w.case_number)}`:'Caso aún no obtenido'}</strong><small>Gestión interna: ${escapeHtml(BonoCase.stages.find(s=>s.id===profileFor(w)?.workflow_stage)?.label||'por configurar')}</small></div>
     <div class="cell"><span class="cell-label">Estado BANHVI (consulta)</span><strong>${escapeHtml(latestState(w.last_states))}</strong>${w.last_success_at?`<small>Última consulta completada: ${escapeHtml(formatDate(w.last_success_at))}</small>`:''}${w.last_error?`<small>Último intento con error${w.last_attempt_at?` (${escapeHtml(formatDate(w.last_attempt_at))})`:''}: ${escapeHtml(consultationErrorLabel(w.last_error))}</small>`:''}${formalizationRowHtml(w)}${profileFor(w)?`<small>${escapeHtml(documentationLabel(profileFor(w)))}</small>`:''}</div>
     <div><span class="badge ${w.last_error?'error':w.enabled?'':'paused'}">${w.last_error?'Revisar consulta':w.enabled?'Monitoreo activo':'Monitoreo pausado'}</span></div>
-    <div class="row-actions"><button data-detail="${w.id}" title="Ver estados y gestionar">Ver</button>${canEditCases()?`<button data-toggle="${w.id}" title="${w.enabled?'Pausar':'Activar'}">${w.enabled?'Pausar':'Activar'}</button>`:''}</div>
+    <div class="row-actions"><button data-detail="${w.id}" title="Ver estados y gestionar">Ver</button>${canEditCases()?`<button data-check="${w.id}" title="Solicitar revisión prioritaria en la próxima ejecución del robot" ${!w.enabled||checkRequests.some(r=>r.watch_id===w.id&&r.status==='pending')?'disabled':''}>${checkRequests.some(r=>r.watch_id===w.id&&r.status==='pending')?'Consulta en cola':'Consultar BANHVI'}</button><button data-toggle="${w.id}" title="${w.enabled?'Pausar':'Activar'}">${w.enabled?'Pausar':'Activar'}</button>`:''}</div>
   </article>`).join(''):'<div class="empty">No encontramos expedientes.</div>';
   document.querySelectorAll('[data-detail]').forEach(b=>b.onclick=()=>openDetail(b.dataset.detail));
   document.querySelectorAll('[data-toggle]').forEach(b=>b.onclick=()=>toggleWatch(b.dataset.toggle));
+  document.querySelectorAll('[data-check]').forEach(b=>b.onclick=()=>requestWatchCheck(b.dataset.check,b));
   renderPagination('#watch-pagination',watchPagination,rows.length,()=>renderWatches($('#search').value),{label:'expedientes',pageSizes:true});
+}
+
+async function requestWatchCheck(id,button){
+  if(!canEditCases()||!watches.some(w=>w.id===id&&w.enabled))return;
+  const organizationId=currentOrganization?.id;
+  button.disabled=true;button.textContent='Solicitando…';
+  try{
+    const {data,error}=await client.rpc('request_banhvi_check',{p_watch_id:id});
+    if(organizationId!==currentOrganization?.id)return;
+    if(error){
+      if(error.code==='PGRST202'||error.code==='42883')toast('Falta activar el SQL de consultas individuales en Supabase');
+      else if(error.message?.includes('cinco minutos'))toast('Esperá cinco minutos entre solicitudes de este expediente');
+      else toast('No se pudo solicitar la consulta. Verificá tus permisos y que el monitoreo esté activo');
+      return;
+    }
+    checkRequests=checkRequests.filter(r=>r.watch_id!==id);
+    checkRequests.push({watch_id:id,...data});
+    toast('Consulta en cola: tendrá prioridad en la próxima ejecución del robot');
+  }catch{toast('No se pudo conectar. Intentá nuevamente');}
+  finally{if(organizationId===currentOrganization?.id)renderWatches($('#search').value);}
 }
 
 function renderActivity(){
@@ -288,6 +312,7 @@ function openDetail(id){
   const w=watches.find(x=>x.id===id);if(!w)return;currentWatchId=id;
   $('#detail-title').textContent=w.label||'Expediente';
   $('#detail-meta').innerHTML=`<span><i class="traffic ${trafficStatus(w)}"></i>Cédula ${escapeHtml(w.cedula)}</span><span>${w.case_number?`Caso #${escapeHtml(w.case_number)}`:'Caso pendiente'}</span><span>${w.enabled?'Activo':'Pausado'}</span>`;
+  $('#detail-check-id').textContent=w.id;
   $('#internal-deadline').innerHTML=formalizationHtml(w);
   $('#integral-case-management').classList.toggle('hidden',!caseFeaturesAvailable);
   if(caseFeaturesAvailable)caseManager.open(w,profileFor(w)||{},documents);
