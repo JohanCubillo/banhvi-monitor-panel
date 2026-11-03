@@ -62,8 +62,14 @@ function formatDate(value) {
 }
 function escapeHtml(value='') { const div=document.createElement('div'); div.textContent=String(value); return div.innerHTML; }
 function latestState(states) {
-  if (!Array.isArray(states) || !states.length) return 'Pendiente de primera revisión';
+  if (!Array.isArray(states) || !states.length) return 'Sin consulta BANHVI completada';
   return [...states].sort((a,b) => { const [da,ma,ya]=a.date.split('/').map(Number),[db,mb,yb]=b.date.split('/').map(Number); return new Date(yb,mb-1,db)-new Date(ya,ma-1,da); })[0].description;
+}
+function documentationLabel(profile){
+  const checklist=Array.isArray(profile.checklist)?profile.checklist:[];
+  if(!checklist.length)return 'Documentación interna: sin requisitos configurados';
+  const stats=BonoCase.checklistStats(checklist);
+  return stats.total?`Documentación interna: ${stats.percent}% completa`:'Documentación interna: no aplica';
 }
 function toast(text){ const el=$('#toast'); el.textContent=text; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 
@@ -221,9 +227,9 @@ function renderWatches(query='') {
   const pageRange=paginationRange(watchPagination,rows.length),pageRows=rows.slice(pageRange.start,pageRange.end);
   $('#watch-list').innerHTML=rows.length?pageRows.map(w=>`<article class="watch-row ${trafficStatus(w)==='red'?'attention':trafficStatus(w)==='yellow'?'near-due':''}">
     <div class="watch-name"><div class="watch-icon">${escapeHtml((w.label||'E').slice(0,1).toUpperCase())}</div><div><strong><span class="traffic ${trafficStatus(w)}"></span>${escapeHtml(w.label||'Sin nombre')}</strong><small>Cédula ${escapeHtml(w.cedula)}</small><span class="priority">${escapeHtml(w.priority||'normal')} · ${escapeHtml(w.assigned_to||'Sin responsable')}</span></div></div>
-    <div class="cell"><span class="cell-label">Caso BANHVI</span><strong>${w.case_number?`#${escapeHtml(w.case_number)}`:'Pendiente'}</strong><small>${escapeHtml(BonoCase.stages.find(s=>s.id===profileFor(w)?.workflow_stage)?.label||'Gestión por configurar')}</small></div>
-    <div class="cell"><span class="cell-label">Estado BANHVI (consulta)</span><strong>${escapeHtml(latestState(w.last_states))}</strong><small>${escapeHtml(formatDate(w.last_success_at))}</small>${formalizationRowHtml(w)}${profileFor(w)?`<small>Documentación: ${BonoCase.checklistStats(profileFor(w).checklist).percent}% completa</small>`:''}</div>
-    <div><span class="badge ${w.last_error?'error':w.enabled?'':'paused'}">${w.last_error?'Revisar':w.enabled?'Activo':'Pausado'}</span></div>
+    <div class="cell"><span class="cell-label">Caso BANHVI</span><strong>${w.case_number?`#${escapeHtml(w.case_number)}`:'Caso aún no obtenido'}</strong><small>Gestión interna: ${escapeHtml(BonoCase.stages.find(s=>s.id===profileFor(w)?.workflow_stage)?.label||'por configurar')}</small></div>
+    <div class="cell"><span class="cell-label">Estado BANHVI (consulta)</span><strong>${escapeHtml(latestState(w.last_states))}</strong>${w.last_success_at?`<small>Última consulta completada: ${escapeHtml(formatDate(w.last_success_at))}</small>`:''}${w.last_error?`<small>Último intento con error${w.last_attempt_at?` (${escapeHtml(formatDate(w.last_attempt_at))})`:''}: ${escapeHtml(w.last_error)}</small>`:''}${formalizationRowHtml(w)}${profileFor(w)?`<small>${escapeHtml(documentationLabel(profileFor(w)))}</small>`:''}</div>
+    <div><span class="badge ${w.last_error?'error':w.enabled?'':'paused'}">${w.last_error?'Revisar consulta':w.enabled?'Monitoreo activo':'Monitoreo pausado'}</span></div>
     <div class="row-actions"><button data-detail="${w.id}" title="Ver estados y gestionar">Ver</button>${canEditCases()?`<button data-toggle="${w.id}" title="${w.enabled?'Pausar':'Activar'}">${w.enabled?'Pausar':'Activar'}</button>`:''}</div>
   </article>`).join(''):'<div class="empty">No encontramos expedientes.</div>';
   document.querySelectorAll('[data-detail]').forEach(b=>b.onclick=()=>openDetail(b.dataset.detail));
