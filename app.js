@@ -71,6 +71,11 @@ function documentationLabel(profile){
   const stats=BonoCase.checklistStats(checklist);
   return stats.total?`Documentación interna: ${stats.percent}% completa`:'Documentación interna: no aplica';
 }
+function consultationErrorLabel(value){
+  const code=String(value||'');
+  const messages={CASE_NOT_FOUND:'BANHVI no devolvió resultados para esta cédula en la última búsqueda',CASE_NOT_RESOLVED:'No se pudo abrir un caso automáticamente; requiere revisión'};
+  return Object.hasOwn(messages,code)?`${messages[code]} (${code})`:code;
+}
 function toast(text){ const el=$('#toast'); el.textContent=text; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 
 async function signIn(event) {
@@ -228,7 +233,7 @@ function renderWatches(query='') {
   $('#watch-list').innerHTML=rows.length?pageRows.map(w=>`<article class="watch-row ${trafficStatus(w)==='red'?'attention':trafficStatus(w)==='yellow'?'near-due':''}">
     <div class="watch-name"><div class="watch-icon">${escapeHtml((w.label||'E').slice(0,1).toUpperCase())}</div><div><strong><span class="traffic ${trafficStatus(w)}"></span>${escapeHtml(w.label||'Sin nombre')}</strong><small>Cédula ${escapeHtml(w.cedula)}</small><span class="priority">${escapeHtml(w.priority||'normal')} · ${escapeHtml(w.assigned_to||'Sin responsable')}</span></div></div>
     <div class="cell"><span class="cell-label">Caso BANHVI</span><strong>${w.case_number?`#${escapeHtml(w.case_number)}`:'Caso aún no obtenido'}</strong><small>Gestión interna: ${escapeHtml(BonoCase.stages.find(s=>s.id===profileFor(w)?.workflow_stage)?.label||'por configurar')}</small></div>
-    <div class="cell"><span class="cell-label">Estado BANHVI (consulta)</span><strong>${escapeHtml(latestState(w.last_states))}</strong>${w.last_success_at?`<small>Última consulta completada: ${escapeHtml(formatDate(w.last_success_at))}</small>`:''}${w.last_error?`<small>Último intento con error${w.last_attempt_at?` (${escapeHtml(formatDate(w.last_attempt_at))})`:''}: ${escapeHtml(w.last_error)}</small>`:''}${formalizationRowHtml(w)}${profileFor(w)?`<small>${escapeHtml(documentationLabel(profileFor(w)))}</small>`:''}</div>
+    <div class="cell"><span class="cell-label">Estado BANHVI (consulta)</span><strong>${escapeHtml(latestState(w.last_states))}</strong>${w.last_success_at?`<small>Última consulta completada: ${escapeHtml(formatDate(w.last_success_at))}</small>`:''}${w.last_error?`<small>Último intento con error${w.last_attempt_at?` (${escapeHtml(formatDate(w.last_attempt_at))})`:''}: ${escapeHtml(consultationErrorLabel(w.last_error))}</small>`:''}${formalizationRowHtml(w)}${profileFor(w)?`<small>${escapeHtml(documentationLabel(profileFor(w)))}</small>`:''}</div>
     <div><span class="badge ${w.last_error?'error':w.enabled?'':'paused'}">${w.last_error?'Revisar consulta':w.enabled?'Monitoreo activo':'Monitoreo pausado'}</span></div>
     <div class="row-actions"><button data-detail="${w.id}" title="Ver estados y gestionar">Ver</button>${canEditCases()?`<button data-toggle="${w.id}" title="${w.enabled?'Pausar':'Activar'}">${w.enabled?'Pausar':'Activar'}</button>`:''}</div>
   </article>`).join(''):'<div class="empty">No encontramos expedientes.</div>';
