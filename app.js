@@ -48,9 +48,21 @@ const operationsReports = BonoReports.mount({container:'#operations-reports',get
 const platformManager = BonoPlatform.mount({container:'#platform-admin',client,getContext:()=>({isPlatformAdmin,currentOrganization}),onChanged:async()=>{if(sessionUser)await showSession({user:sessionUser});},toast});
 const workbookImporter=BonoImport.mount({client,getContext:()=>({organization:currentOrganization,membership:currentMembership,userId:sessionUser?.id,watches,intakeAvailable}),onImported:async()=>loadData(),toast});
 
+const needsCaseReview=watch=>watch.last_error==='CASE_SELECTION_REQUIRED';
+function caseReviewLabel(watch){
+  if(caseChoices.some(c=>c.watch_id===watch.id&&c.selected_case_number))return 'Caso elegido · pendiente de consulta';
+  return watch.case_number?'Revisar casos disponibles':'Pendiente de elegir caso';
+}
+function consultationNoticeHtml(watch){
+  if(!watch.last_error)return '';
+  const date=watch.last_attempt_at?` (${escapeHtml(formatDate(watch.last_attempt_at))})`:'';
+  if(needsCaseReview(watch))return `<small>Revisión de casos${date}: ${escapeHtml(caseReviewLabel(watch))}. Abrí el detalle para continuar.</small>`;
+  return `<small>Último intento con error${date}: ${escapeHtml(consultationErrorLabel(watch.last_error))}</small>`;
+}
 function trafficStatus(watch){
-  if(watch.last_error)return 'red';
+  if(watch.last_error&&!needsCaseReview(watch))return 'red';
   if(watch.due_at){const hours=(new Date(watch.due_at)-Date.now())/36e5;if(hours<0)return 'red';if(hours<72)return 'yellow';}
+  if(needsCaseReview(watch))return 'yellow';
   if(watch.last_success_at&&(Date.now()-new Date(watch.last_success_at))/864e5>3)return 'yellow';
   return 'green';
 }
@@ -86,7 +98,7 @@ function queuedCheckHtml(w){
 function renderMonitorHealth(){
   const el=$('#monitor-health');if(!el)return;
   const successful=watches.filter(w=>w.last_success_at),latest=successful.map(w=>Date.parse(w.last_success_at)).filter(Number.isFinite).sort((a,b)=>b-a)[0];
-  el.textContent=`BANHVI: ${successful.length} de ${watches.length} expedientes con alguna consulta exitosa guardada. ${watches.filter(w=>w.last_error).length} con error o revisión pendiente en su último intento. ${checkRequests.filter(r=>r.status==='pending').length} solicitudes en cola. ${latest?`Consulta exitosa más reciente: ${formatDate(latest)}.`:'Todavía no hay consultas exitosas guardadas.'} Actualizar el panel no inicia consultas a BANHVI.`;
+  el.textContent=`BANHVI: ${successful.length} de ${watches.length} expedientes con alguna consulta exitosa guardada. ${watches.filter(w=>w.last_error&&!needsCaseReview(w)).length} con error en su último intento. ${watches.filter(needsCaseReview).length} con casos por revisar o elegir. ${checkRequests.filter(r=>r.status==='pending').length} solicitudes en cola. ${latest?`Consulta exitosa más reciente: ${formatDate(latest)}.`:'Todavía no hay consultas exitosas guardadas.'} Actualizar el panel no inicia consultas a BANHVI.`;
 }
 function toast(text){ const el=$('#toast'); el.textContent=text; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 
@@ -204,8 +216,8 @@ async function loadData() {
 function render() {
   const official=$('#official-status-filter'),selected=official.value;
   const labels=[...new Set(watches.filter(w=>w.last_states?.length).map(w=>latestState(w.last_states)))].sort((a,b)=>a.localeCompare(b,'es'));
-  official.innerHTML='<option value="">Todos los estados BANHVI</option><option value="__unread">Sin consulta exitosa</option>'+labels.map(label=>`<option value="${escapeHtml(label)}">BANHVI: ${escapeHtml(label)}</option>`).join('');
-  official.value=selected==='__unread'||labels.includes(selected)?selected:'';
+  official.innerHTML='<option value="">Todos los estados BANHVI</option><option value="__unread">Sin consulta exitosa</option><option value="__choose">Casos por revisar o elegir</option>'+labels.map(label=>`<option value="${escapeHtml(label)}">BANHVI: ${escapeHtml(label)}</option>`).join('');
+  official.value=['__unread','__choose'].includes(selected)||labels.includes(selected)?selected:'';
   $('#metric-total').textContent=watches.length;
   $('#metric-active').textContent=watches.filter(w=>w.enabled).length;
   $('#metric-changes').textContent=events.length;
@@ -250,7 +262,7 @@ function renderWatches(query='') {
   const criteria=JSON.stringify([q,status,priority,emitted,deadline,modality,stage,officialStatus,$('#case-sort').value]);
   if(watchPagination.criteria!==criteria){watchPagination.page=1;watchPagination.criteria=criteria;}
   const rows=watches.filter(w=>BonoCase.matchesCaseSearch(w,profileFor(w)||{},q))
-    .filter(w=>!officialStatus||(officialStatus==='__unread'?!w.last_states?.length:latestState(w.last_states)===officialStatus))
+    .filter(w=>!officialStatus||(officialStatus==='__unread'?!w.last_states?.length:officialStatus==='__choose'?needsCaseReview(w):latestState(w.last_states)===officialStatus))
     .filter(w=>!status||trafficStatus(w)===status).filter(w=>!priority||w.priority===priority).filter(w=>!modality||profileFor(w)?.modality===modality).filter(w=>!stage||profileFor(w)?.workflow_stage===stage)
     .filter(w=>{const info=formalizationInfo(w),completed=BonoCase.formalizationComplete(w,profileFor(w)||{});return(!emitted||(emitted==='yes'&&info)||(emitted==='no'&&!info)||(emitted==='completed'&&completed)||(emitted==='pending'&&info&&!completed))&&matchesDeadline(info);});
   if($('#case-sort').value==='deadline')rows.sort((a,b)=>{const x=formalizationInfo(a),y=formalizationInfo(b);return (x&&!x.completed?x.days:Infinity)-(y&&!y.completed?y.days:Infinity);});
@@ -258,9 +270,9 @@ function renderWatches(query='') {
   $('#watch-list').innerHTML=rows.length?pageRows.map(w=>`<article class="watch-row ${trafficStatus(w)==='red'?'attention':trafficStatus(w)==='yellow'?'near-due':''}">
     <div class="watch-name"><div class="watch-icon">${escapeHtml((w.label||'E').slice(0,1).toUpperCase())}</div><div><strong><span class="traffic ${trafficStatus(w)}"></span>${escapeHtml(w.label||'Sin nombre')}</strong><small>Cédula ${escapeHtml(w.cedula)}</small><span class="priority">${escapeHtml(w.priority||'normal')} · ${escapeHtml(w.assigned_to||'Sin responsable')}</span></div></div>
     <div class="cell"><span class="cell-label">Caso BANHVI</span><strong>${w.case_number?`#${escapeHtml(w.case_number)}`:'Caso aún no obtenido'}</strong><small>Gestión interna: ${escapeHtml(BonoCase.stages.find(s=>s.id===profileFor(w)?.workflow_stage)?.label||'por configurar')}</small></div>
-    <div class="cell"><span class="cell-label">Estado BANHVI (consulta)</span><strong>${escapeHtml(latestState(w.last_states))}</strong>${w.last_success_at?`<small>Última consulta completada: ${escapeHtml(formatDate(w.last_success_at))}</small>`:''}${w.last_error?`<small>Último intento con error${w.last_attempt_at?` (${escapeHtml(formatDate(w.last_attempt_at))})`:''}: ${escapeHtml(consultationErrorLabel(w.last_error))}</small>`:''}${queuedCheckHtml(w)}${formalizationRowHtml(w)}${profileFor(w)?`<small>${escapeHtml(documentationLabel(profileFor(w)))}</small>`:''}</div>
-    <div><span class="badge ${w.last_error?'error':w.enabled?'':'paused'}">${w.last_error?'Revisar consulta':w.enabled?'Monitoreo activo':'Monitoreo pausado'}</span></div>
-    <div class="row-actions"><button data-detail="${w.id}" title="Ver estados y gestionar">Ver</button>${canEditCases()?`<button data-check="${w.id}" title="Solicitar revisión prioritaria en la próxima ejecución del robot" ${!w.enabled||checkRequests.some(r=>r.watch_id===w.id&&r.status==='pending')?'disabled':''}>${checkRequests.some(r=>r.watch_id===w.id&&r.status==='pending')?'Consulta en cola':'Consultar BANHVI'}</button><button data-toggle="${w.id}" title="${w.enabled?'Pausar':'Activar'}">${w.enabled?'Pausar':'Activar'}</button>`:''}</div>
+    <div class="cell"><span class="cell-label">Estado BANHVI (consulta)</span><strong>${escapeHtml(latestState(w.last_states))}</strong>${w.last_success_at?`<small>Última consulta completada: ${escapeHtml(formatDate(w.last_success_at))}</small>`:''}${consultationNoticeHtml(w)}${queuedCheckHtml(w)}${formalizationRowHtml(w)}${profileFor(w)?`<small>${escapeHtml(documentationLabel(profileFor(w)))}</small>`:''}</div>
+    <div><span class="badge ${needsCaseReview(w)?'case-selection':w.last_error?'error':w.enabled?'':'paused'}">${needsCaseReview(w)?escapeHtml(caseReviewLabel(w)):w.last_error?'Revisar consulta':w.enabled?'Monitoreo activo':'Monitoreo pausado'}</span></div>
+    <div class="row-actions"><button data-detail="${w.id}" title="Ver estados y gestionar">${needsCaseReview(w)&&!caseChoices.some(c=>c.watch_id===w.id&&c.selected_case_number)?w.case_number?'Revisar casos':'Elegir caso':'Ver'}</button>${canEditCases()?`<button data-check="${w.id}" title="Solicitar revisión prioritaria en la próxima ejecución del robot" ${!w.enabled||checkRequests.some(r=>r.watch_id===w.id&&r.status==='pending')?'disabled':''}>${checkRequests.some(r=>r.watch_id===w.id&&r.status==='pending')?'Consulta en cola':'Consultar BANHVI'}</button><button data-toggle="${w.id}" title="${w.enabled?'Pausar':'Activar'}">${w.enabled?'Pausar':'Activar'}</button>`:''}</div>
   </article>`).join(''):'<div class="empty">No encontramos expedientes.</div>';
   document.querySelectorAll('[data-detail]').forEach(b=>b.onclick=()=>openDetail(b.dataset.detail));
   document.querySelectorAll('[data-toggle]').forEach(b=>b.onclick=()=>toggleWatch(b.dataset.toggle));
@@ -329,8 +341,8 @@ async function exportExcel(){
   try{
     const xml=value=>String(value??'').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c]));
     const sheet=(name,headers,rows)=>`<Worksheet ss:Name="${xml(name)}"><Table>${headers.map(h=>`<Column ss:Width="${h.width||120}"/>`).join('')}<Row ss:StyleID="Header">${headers.map(h=>`<Cell><Data ss:Type="String">${xml(h.label)}</Data></Cell>`).join('')}</Row>${rows.map(row=>`<Row>${headers.map(h=>`<Cell><Data ss:Type="String">${xml(row[h.key])}</Data></Cell>`).join('')}</Row>`).join('')}</Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>1</SplitHorizontal><TopRowBottomPane>1</TopRowBottomPane></WorksheetOptions></Worksheet>`;
-    const summaryHeaders=[{label:'Nombre o referencia',key:'label',width:180},{label:'Cédula',key:'cedula',width:100},{label:'Caso BANHVI',key:'case',width:110},{label:'Monitoreo',key:'enabled',width:90},{label:'Estado BANHVI (consulta)',key:'state',width:220},{label:'Última revisión',key:'checked',width:150},{label:'Prioridad',key:'priority',width:90},{label:'Responsable',key:'assigned',width:140},{label:'Vencimiento',key:'due',width:130},{label:'Error reciente',key:'error',width:160}];
-    const summaryRows=watches.map(w=>({label:w.label||'',cedula:w.cedula,case:w.case_number||'',enabled:w.enabled?'Activo':'Pausado',state:latestState(w.last_states),checked:formatDate(w.last_success_at),priority:w.priority||'normal',assigned:w.assigned_to||'',due:w.due_at?formatDate(w.due_at):'',error:w.last_error||''}));
+    const summaryHeaders=[{label:'Nombre o referencia',key:'label',width:180},{label:'Cédula',key:'cedula',width:100},{label:'Caso BANHVI',key:'case',width:110},{label:'Monitoreo',key:'enabled',width:90},{label:'Estado BANHVI (consulta)',key:'state',width:220},{label:'Última revisión',key:'checked',width:150},{label:'Prioridad',key:'priority',width:90},{label:'Responsable',key:'assigned',width:140},{label:'Vencimiento',key:'due',width:130},{label:'Error reciente',key:'error',width:160},{label:'Acción pendiente',key:'action',width:180}];
+    const summaryRows=watches.map(w=>({label:w.label||'',cedula:w.cedula,case:w.case_number||'',enabled:w.enabled?'Activo':'Pausado',state:latestState(w.last_states),checked:formatDate(w.last_success_at),priority:w.priority||'normal',assigned:w.assigned_to||'',due:w.due_at?formatDate(w.due_at):'',error:w.last_error==='CASE_SELECTION_REQUIRED'?'':w.last_error||'',action:w.last_error==='CASE_SELECTION_REQUIRED'?'Revisar o elegir caso BANHVI':''}));
     const stateHeaders=[{label:'Nombre o referencia',key:'label',width:180},{label:'Cédula',key:'cedula',width:100},{label:'Caso BANHVI',key:'case',width:110},{label:'Fecha del estado',key:'date',width:110},{label:'Descripción',key:'description',width:280}];
     const stateRows=watches.flatMap(w=>(w.last_states||[]).map(s=>({label:w.label||'',cedula:w.cedula,case:w.case_number||'',date:s.date,description:s.description})));
     const changeHeaders=[{label:'Nombre o referencia',key:'label',width:180},{label:'Cédula',key:'cedula',width:100},{label:'Caso BANHVI',key:'case',width:110},{label:'Detectado',key:'created',width:150},{label:'Notificación',key:'status',width:120},{label:'Correo enviado',key:'sent',width:150},{label:'Estados agregados',key:'added',width:300},{label:'Estados eliminados',key:'removed',width:300}];

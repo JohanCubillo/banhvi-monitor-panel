@@ -59,3 +59,5 @@
 .case-choices{padding:16px;margin:16px 0;border:1px solid var(--line);border-radius:12px;background:var(--mint-soft)}.case-choices p{margin:8px 0;font-size:14px}.case-choices form{display:flex;flex-wrap:wrap;gap:12px;align-items:end}.case-choices label{flex:1;min-width:160px}.case-choices select{display:block;width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fff}.case-choices button{border:0;border-radius:8px;padding:12px;background:var(--deep);color:#fff}.case-choices small{display:block;margin-top:10px}
 
 .monitor-health{padding:14px 18px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--muted);font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+
+.badge.case-selection{background:#fff1ca;color:#805a00;white-space:normal;text-align:center}

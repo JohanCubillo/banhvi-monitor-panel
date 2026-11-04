@@ -47,7 +47,8 @@
     const inspection=construction.next_inspection_on || construction.next_inspection;
     const inspectionDue=inspection && inspection<=today();
     const daysInStage=elapsed(p.stage_entered_at), issues=[];
-    if(watch.last_error)issues.push({kind:'danger',text:'Error de consulta BANHVI'});
+    if(watch.last_error==='CASE_SELECTION_REQUIRED')issues.push({kind:'warning',text:'Revisar o elegir caso BANHVI'});
+    else if(watch.last_error)issues.push({kind:'danger',text:'Error de consulta BANHVI'});
     if(deadline&&!deadline.completed&&deadline.days<=10)issues.push({kind:deadline.days<=0?'danger':'warning',text:deadline.days<0?`Meta interna vencida hace ${Math.abs(deadline.days)} días`:`Meta interna: ${deadline.days} días restantes`});
     if(docs.expired)issues.push({kind:'danger',text:`${docs.expired} documento(s) vencido(s)`});
     if(docs.pending)issues.push({kind:'warning',text:`${docs.pending} documento(s) por completar`});

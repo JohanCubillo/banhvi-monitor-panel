@@ -100,6 +100,7 @@
       stages.find(s=>s.id===profile.workflow_stage)?.label,
       ...(watch.last_states||[]).map(s=>s.description),
       formalizationComplete(watch,profile)?'formalización completada':info?'formalización pendiente':'',
+      watch.last_error==='CASE_SELECTION_REQUIRED'?'varios casos pendiente de elegir caso revisión de casos':'',
       info?.elapsed,info?.days].some(value=>normalizeSearch(value).includes(q));
   }
   scope.BonoCase={modalities,stages,requirementsFor,profileDefaults,formalizationInfo,formalizationComplete,matchesCaseSearch,normalizeSearch,checklistStats,evaluatePrequalification,parseDate,todayISO,isoDay};
