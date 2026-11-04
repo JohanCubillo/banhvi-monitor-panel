@@ -76,7 +76,17 @@ function documentationLabel(profile){
 function consultationErrorLabel(value){
   const code=String(value||'');
   const messages={CASE_SELECTION_REQUIRED:'BANHVI devolvió varios casos o el caso vinculado no aparece. Abrí «Ver» para revisar',CASE_IDENTITY_CHANGED:'BANHVI abrió un caso distinto del vinculado; conservamos los estados anteriores',CASE_NOT_FOUND:'BANHVI no devolvió resultados para esta cédula en la última búsqueda',CASE_NOT_RESOLVED:'No se pudo abrir un caso automáticamente; requiere revisión'};
+  messages.STATES_TABLE_UNAVAILABLE='El robot no encontró la tabla de estados';messages.STATES_CONTROLS_NOT_READY='Los controles de Estados no terminaron de cargar';messages.STATES_PANEL_NOT_OPEN='La sección Estados no se abrió correctamente';
   return Object.hasOwn(messages,code)?`${messages[code]} (${code})`:code;
+}
+function queuedCheckHtml(w){
+  const request=checkRequests.find(r=>r.watch_id===w.id&&r.status==='pending');
+  return request?`<small data-request-time>Consulta solicitada: ${escapeHtml(formatDate(request.requested_at))} · pendiente de ejecución</small>`:'';
+}
+function renderMonitorHealth(){
+  const el=$('#monitor-health');if(!el)return;
+  const successful=watches.filter(w=>w.last_success_at),latest=successful.map(w=>Date.parse(w.last_success_at)).filter(Number.isFinite).sort((a,b)=>b-a)[0];
+  el.textContent=`BANHVI: ${successful.length} de ${watches.length} expedientes con alguna consulta exitosa guardada. ${watches.filter(w=>w.last_error).length} con error o revisión pendiente en su último intento. ${checkRequests.filter(r=>r.status==='pending').length} solicitudes en cola. ${latest?`Consulta exitosa más reciente: ${formatDate(latest)}.`:'Todavía no hay consultas exitosas guardadas.'} Actualizar el panel no inicia consultas a BANHVI.`;
 }
 function toast(text){ const el=$('#toast'); el.textContent=text; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 
@@ -187,11 +197,15 @@ async function loadData() {
     consents=consentResult.data||[];privacyRequests=requestResult.data||[];auditEvents=auditResult.data||[];
   }
   render();
-  $('#sync-status').innerHTML='<i></i> Sincronizado';
+  $('#sync-status').innerHTML='<i></i> Datos del panel actualizados';
   if(eventResult.error||noteResult.error||taskResult.error||documentResult.error){$('#sync-status').textContent='Carga incompleta';toast('Algunos detalles no se pudieron actualizar');}
 }
 
 function render() {
+  const official=$('#official-status-filter'),selected=official.value;
+  const labels=[...new Set(watches.filter(w=>w.last_states?.length).map(w=>latestState(w.last_states)))].sort((a,b)=>a.localeCompare(b,'es'));
+  official.innerHTML='<option value="">Todos los estados BANHVI</option><option value="__unread">Sin consulta exitosa</option>'+labels.map(label=>`<option value="${escapeHtml(label)}">BANHVI: ${escapeHtml(label)}</option>`).join('');
+  official.value=selected==='__unread'||labels.includes(selected)?selected:'';
   $('#metric-total').textContent=watches.length;
   $('#metric-active').textContent=watches.filter(w=>w.enabled).length;
   $('#metric-changes').textContent=events.length;
@@ -227,19 +241,24 @@ function renderPagination(selector,state,total,onChange,{label,pageSizes=false}=
 }
 
 function renderWatches(query='') {
+  renderMonitorHealth();
   const q=query.trim().toLowerCase();
   const status=$('#status-filter')?.value||'',priority=$('#priority-filter')?.value||'',emitted=$('#emitted-filter')?.value||'',deadline=$('#deadline-filter')?.value||'';
   const matchesDeadline=info=>!deadline||(!info?.completed&&((deadline==='expired'&&info?.days<0)||(deadline==='0-5'&&info?.days>=0&&info.days<=5)||(deadline==='6-10'&&info?.days>=6&&info.days<=10)||(deadline==='11-30'&&info?.days>=11&&info.days<=30)||(deadline==='31+'&&info?.days>=31)));
   const modality=$('#modality-filter').value,stage=$('#stage-filter').value;
-  const criteria=JSON.stringify([q,status,priority,emitted,deadline,modality,stage,$('#case-sort').value]);
+  const officialStatus=$('#official-status-filter').value;
+  const criteria=JSON.stringify([q,status,priority,emitted,deadline,modality,stage,officialStatus,$('#case-sort').value]);
   if(watchPagination.criteria!==criteria){watchPagination.page=1;watchPagination.criteria=criteria;}
-  const rows=watches.filter(w=>{const info=formalizationInfo(w),p=profileFor(w),searchValues=[w.label,w.cedula,w.case_number,w.assigned_to,p?.financial_entity,latestState(w.last_states),info?'emitido':'',info?.elapsed,info?.days];return searchValues.some(v=>String(v??'').toLowerCase().includes(q));}).filter(w=>!status||trafficStatus(w)===status).filter(w=>!priority||w.priority===priority).filter(w=>!modality||profileFor(w)?.modality===modality).filter(w=>!stage||profileFor(w)?.workflow_stage===stage).filter(w=>{const info=formalizationInfo(w);return(!emitted||(emitted==='yes'&&info)||(emitted==='no'&&!info))&&matchesDeadline(info);});
+  const rows=watches.filter(w=>BonoCase.matchesCaseSearch(w,profileFor(w)||{},q))
+    .filter(w=>!officialStatus||(officialStatus==='__unread'?!w.last_states?.length:latestState(w.last_states)===officialStatus))
+    .filter(w=>!status||trafficStatus(w)===status).filter(w=>!priority||w.priority===priority).filter(w=>!modality||profileFor(w)?.modality===modality).filter(w=>!stage||profileFor(w)?.workflow_stage===stage)
+    .filter(w=>{const info=formalizationInfo(w),completed=BonoCase.formalizationComplete(w,profileFor(w)||{});return(!emitted||(emitted==='yes'&&info)||(emitted==='no'&&!info)||(emitted==='completed'&&completed)||(emitted==='pending'&&info&&!completed))&&matchesDeadline(info);});
   if($('#case-sort').value==='deadline')rows.sort((a,b)=>{const x=formalizationInfo(a),y=formalizationInfo(b);return (x&&!x.completed?x.days:Infinity)-(y&&!y.completed?y.days:Infinity);});
   const pageRange=paginationRange(watchPagination,rows.length),pageRows=rows.slice(pageRange.start,pageRange.end);
   $('#watch-list').innerHTML=rows.length?pageRows.map(w=>`<article class="watch-row ${trafficStatus(w)==='red'?'attention':trafficStatus(w)==='yellow'?'near-due':''}">
     <div class="watch-name"><div class="watch-icon">${escapeHtml((w.label||'E').slice(0,1).toUpperCase())}</div><div><strong><span class="traffic ${trafficStatus(w)}"></span>${escapeHtml(w.label||'Sin nombre')}</strong><small>Cédula ${escapeHtml(w.cedula)}</small><span class="priority">${escapeHtml(w.priority||'normal')} · ${escapeHtml(w.assigned_to||'Sin responsable')}</span></div></div>
     <div class="cell"><span class="cell-label">Caso BANHVI</span><strong>${w.case_number?`#${escapeHtml(w.case_number)}`:'Caso aún no obtenido'}</strong><small>Gestión interna: ${escapeHtml(BonoCase.stages.find(s=>s.id===profileFor(w)?.workflow_stage)?.label||'por configurar')}</small></div>
-    <div class="cell"><span class="cell-label">Estado BANHVI (consulta)</span><strong>${escapeHtml(latestState(w.last_states))}</strong>${w.last_success_at?`<small>Última consulta completada: ${escapeHtml(formatDate(w.last_success_at))}</small>`:''}${w.last_error?`<small>Último intento con error${w.last_attempt_at?` (${escapeHtml(formatDate(w.last_attempt_at))})`:''}: ${escapeHtml(consultationErrorLabel(w.last_error))}</small>`:''}${formalizationRowHtml(w)}${profileFor(w)?`<small>${escapeHtml(documentationLabel(profileFor(w)))}</small>`:''}</div>
+    <div class="cell"><span class="cell-label">Estado BANHVI (consulta)</span><strong>${escapeHtml(latestState(w.last_states))}</strong>${w.last_success_at?`<small>Última consulta completada: ${escapeHtml(formatDate(w.last_success_at))}</small>`:''}${w.last_error?`<small>Último intento con error${w.last_attempt_at?` (${escapeHtml(formatDate(w.last_attempt_at))})`:''}: ${escapeHtml(consultationErrorLabel(w.last_error))}</small>`:''}${queuedCheckHtml(w)}${formalizationRowHtml(w)}${profileFor(w)?`<small>${escapeHtml(documentationLabel(profileFor(w)))}</small>`:''}</div>
     <div><span class="badge ${w.last_error?'error':w.enabled?'':'paused'}">${w.last_error?'Revisar consulta':w.enabled?'Monitoreo activo':'Monitoreo pausado'}</span></div>
     <div class="row-actions"><button data-detail="${w.id}" title="Ver estados y gestionar">Ver</button>${canEditCases()?`<button data-check="${w.id}" title="Solicitar revisión prioritaria en la próxima ejecución del robot" ${!w.enabled||checkRequests.some(r=>r.watch_id===w.id&&r.status==='pending')?'disabled':''}>${checkRequests.some(r=>r.watch_id===w.id&&r.status==='pending')?'Consulta en cola':'Consultar BANHVI'}</button><button data-toggle="${w.id}" title="${w.enabled?'Pausar':'Activar'}">${w.enabled?'Pausar':'Activar'}</button>`:''}</div>
   </article>`).join(''):'<div class="empty">No encontramos expedientes.</div>';
@@ -441,7 +460,7 @@ async function openAdminView(view){
 }
 function clearCompanyData(){
   watchPagination.page=1;watchPagination.pageSize=10;watchPagination.criteria='';activityPagination.page=1;activityPagination.pageSize=10;
-  loadSequence++;watches=[];events=[];notes=[];tasks=[];documents=[];caseProfiles=[];consents=[];privacyRequests=[];auditEvents=[];currentWatchId=null;intakeAvailable=false;workbookImporter.invalidate();
+  loadSequence++;watches=[];events=[];checkRequests=[];caseChoices=[];notes=[];tasks=[];documents=[];caseProfiles=[];consents=[];privacyRequests=[];auditEvents=[];currentWatchId=null;intakeAvailable=false;workbookImporter.invalidate();
   $('#detail-dialog').close();$('#add-dialog').close();closeClientPreview();caseManager.close();render();
 }
 async function selectOrganization(id){
@@ -486,10 +505,10 @@ async function showSession(session){
 
 $('#login-form').addEventListener('submit',signIn);$('#reset-password-btn').onclick=requestPasswordReset;$('#magic-link-btn').onclick=()=>requestMagicLink(false);$('#activate-access-btn').onclick=()=>requestMagicLink(true);$('#organization-picker').onchange=event=>selectOrganization(event.target.value);$('#password-form').addEventListener('submit',saveNewPassword); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=()=>currentAdminView==='platform'?loadPlatform():loadData(); $('#logout-btn').onclick=()=>client.auth.signOut(); $('#search').addEventListener('input',e=>renderWatches(e.target.value));
 $('#export-btn').onclick=exportExcel;
-['#status-filter','#priority-filter','#emitted-filter','#deadline-filter','#modality-filter','#stage-filter','#case-sort'].forEach(selector=>$(selector).onchange=()=>renderWatches($('#search').value));
+['#status-filter','#priority-filter','#emitted-filter','#deadline-filter','#modality-filter','#stage-filter','#official-status-filter','#case-sort'].forEach(selector=>$(selector).onchange=()=>renderWatches($('#search').value));
 $('#new-modality').innerHTML=BonoCase.modalities.map(m=>`<option value="${m.id}">${escapeHtml(m.label)}</option>`).join('');
 $('#modality-filter').innerHTML='<option value="">Todas las modalidades</option>'+$('#new-modality').innerHTML;
-$('#stage-filter').innerHTML='<option value="">Todas las etapas internas</option>'+BonoCase.stages.map(s=>`<option value="${s.id}">${escapeHtml(s.label)}</option>`).join('');
+$('#stage-filter').innerHTML='<option value="">Todas las etapas internas</option>'+BonoCase.stages.map(s=>`<option value="${s.id}">Gestión interna: ${escapeHtml(s.label)}</option>`).join('');
 $('#client-education').innerHTML=BonoReports.educationHtml();
 document.querySelectorAll('[data-admin-view]').forEach(button=>button.onclick=()=>openAdminView(button.dataset.adminView));
 $('#print-case').onclick=()=>{const w=watches.find(w=>w.id===currentWatchId);if(w)BonoReports.printCase(w,profileFor(w)||{},notes,documents,tasks);};

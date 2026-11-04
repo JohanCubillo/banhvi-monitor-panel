@@ -62,8 +62,7 @@
     const raw=Number(profile.deadline_days??90);
     const totalDays=Number.isInteger(raw)&&raw>=1&&raw<=3650?raw:90;
     const today=parseDate(todayISO(now));
-    const completed=Boolean(profile.formalized_on||profile.registered_on||['construction','closed'].includes(profile.workflow_stage)||
-      (watch.last_states||[]).some(s=>/^(FORMALIZADO|FORMALIZADA)$/i.test(String(s.description||'').trim())));
+    const completed=formalizationComplete(watch,profile);
     const end=parseDate(profile.formalized_on||profile.registered_on)||today;
     return {emittedDate:isoDay(start),date:isoDay(start+totalDays),deadline:isoDay(start+totalDays),days:start+totalDays-today,elapsed:Math.max(0,end-start),totalDays,completed,label:'Meta interna de formalización'};
   }
@@ -89,5 +88,19 @@
     else if(Number(value.monthly_income)>Number(value.income_limit))flags.push('Ingresos superiores al límite de referencia registrado');
     return {status:flags.length?'review':missing.length?'incomplete':'ready',flags,missing,title:flags.length?'Requiere revisión de la entidad':missing.length?'Orientación pendiente de completar':'Información preliminar completa',disclaimer:'Orientación preliminar. La entidad autorizada y BANHVI determinan los requisitos y la elegibilidad.'};
   }
-  scope.BonoCase={modalities,stages,requirementsFor,profileDefaults,formalizationInfo,checklistStats,evaluatePrequalification,parseDate,todayISO,isoDay};
+  function formalizationComplete(watch={},profile={}){
+    return Boolean(profile.formalized_on||profile.registered_on||['construction','closed'].includes(profile.workflow_stage)||
+      (watch.last_states||[]).some(s=>/^(FORMALIZADO|FORMALIZADA)$/i.test(String(s.description||'').trim())));
+  }
+  const normalizeSearch=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+  function matchesCaseSearch(watch={},profile={},query=''){
+    const q=normalizeSearch(query);if(!q)return true;
+    const info=formalizationInfo(watch,profile);
+    return [watch.label,watch.cedula,watch.case_number,watch.assigned_to,profile.financial_entity,
+      stages.find(s=>s.id===profile.workflow_stage)?.label,
+      ...(watch.last_states||[]).map(s=>s.description),
+      formalizationComplete(watch,profile)?'formalización completada':info?'formalización pendiente':'',
+      info?.elapsed,info?.days].some(value=>normalizeSearch(value).includes(q));
+  }
+  scope.BonoCase={modalities,stages,requirementsFor,profileDefaults,formalizationInfo,formalizationComplete,matchesCaseSearch,normalizeSearch,checklistStats,evaluatePrequalification,parseDate,todayISO,isoDay};
 })(globalThis);
