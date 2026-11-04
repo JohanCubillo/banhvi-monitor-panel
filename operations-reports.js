@@ -2,9 +2,9 @@
 (function (global) {
   'use strict';
   let settings, host, organizationContext;
-  const filterDefaults = () => ({from:'',to:'',entity:'',zone:'',bonoType:'',companyState:'',dateBasis:'created'});
+  const filterDefaults = () => ({from:'',to:'',entity:'',zone:'',bonoType:'',companyState:'',responsible:'',segment:'',dateBasis:'created'});
   const filters = filterDefaults();
-  let activeView='overview', breakdown='zone', charts=[], tableCursor=0, renderingTables=false;
+  let activeView='analytics', breakdown='zone', charts=[], tableCursor=0, renderingTables=false,filtersExpanded=null;
   const tableModels=new Map(),tablePages=new Map();
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   const array = value => Array.isArray(value) ? value : [];
@@ -26,7 +26,7 @@
   const monthLabel = key => new Intl.DateTimeFormat('es-CR',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(key+'-01T12:00:00Z'));
   const sourceLabel = intake => array(intake.sources).map(source=>`${text(source.sheet)||'Hoja'} · fila ${text(source.row)||'sin número'}`).join('; ');
   function resetContext(data) {
-    if(organizationContext!==data.organizationId){Object.assign(filters,filterDefaults());organizationContext=data.organizationId;activeView='overview';breakdown='zone';tablePages.clear();}
+    if(organizationContext!==data.organizationId){Object.assign(filters,filterDefaults());organizationContext=data.organizationId;activeView='analytics';breakdown='zone';filtersExpanded=null;tablePages.clear();}
   }
   const scopedWatches = data => array(data.watches).filter(w=>!data.organizationId||w.organization_id===data.organizationId);
   function profileMap(profiles) {
@@ -48,6 +48,8 @@
     const inspectionDue=inspection && inspection<=today();
     const daysInStage=elapsed(p.stage_entered_at), issues=[];
     if(watch.last_error==='CASE_SELECTION_REQUIRED')issues.push({kind:'warning',text:'Revisar o elegir caso BANHVI'});
+    else if(watch.last_error==='CASE_NOT_FOUND')issues.push({kind:'warning',text:'Sin resultados en la última búsqueda BANHVI'});
+    else if(watch.last_error==='CASE_IDENTITY_CHANGED')issues.push({kind:'warning',text:'Revisar caso vinculado'});
     else if(watch.last_error)issues.push({kind:'danger',text:'Error de consulta BANHVI'});
     if(deadline&&!deadline.completed&&deadline.days<=10)issues.push({kind:deadline.days<=0?'danger':'warning',text:deadline.days<0?`Meta interna vencida hace ${Math.abs(deadline.days)} días`:`Meta interna: ${deadline.days} días restantes`});
     if(docs.expired)issues.push({kind:'danger',text:`${docs.expired} documento(s) vencido(s)`});
@@ -66,7 +68,7 @@
     return scopedWatches(data).filter(w=>{
       const p=profiles.get(w.id),intake=intakeOf(p),entered=filters.dateBasis==='submitted'?(day(intake.submitted_on)!==null?intake.submitted_on:''):dateISO(w.created_at),entity=p?.financial_entity||'Sin entidad';
       return (!filters.from&&!filters.to||!!entered)&&(!filters.from||entered>=filters.from)&&(!filters.to||entered<=filters.to)&&(!filters.entity||entity===filters.entity)&&(!filters.zone||text(intake.zone)===filters.zone)&&(!filters.bonoType||text(intake.bono_type)===filters.bonoType)&&(!filters.companyState||text(intake.company_status)===filters.companyState);
-    }).map(w=>record(w,profiles.get(w.id),data.tasks));
+    }).map(w=>record(w,profiles.get(w.id),data.tasks)).filter(row=>(!filters.responsible||row.responsible===filters.responsible)&&(!filters.segment||global.BonoAnalytics?.matches(row,filters.segment)));
   }
   function group(rows,key) {
     const groups=new Map();
@@ -132,7 +134,29 @@
       <section class="br-intake-block"><h5>Estados de planilla y consulta automática</h5><p class="br-hint">La columna de planilla reproduce su estado y fecha de referencia; no se utiliza como aprobación ni reemplaza el historial consultado por el robot.</p>${table(['Expediente','Estado BANHVI en planilla','Fecha de referencia','Estado de empresa','Estados de la última fecha consultada','Origen'],imported.map(row=>`<tr><th scope="row">${esc(row.watch.label||'Sin nombre')}</th><td>${esc(row.intake.reported_status||'Sin registrar')}</td><td>${esc(rawDate(row.intake,'reported_status_on'))}</td><td>${esc(row.intake.company_status||'Sin registrar')}</td><td>${esc(latestConsultedState(row.watch))}</td><td>${esc(sourceLabel(row.intake)||'Sin referencia de hoja')}</td></tr>`))}</section>
       <details class="br-intake-details"><summary>Ver detalle de ingresos y datos conservados</summary>${table(['Expediente','Ingreso a entidad','Antigüedad','Zona','Tipo de bono','Teléfono','Modelo','Observaciones'],imported.map(row=>`<tr><th scope="row">${esc(row.watch.label||'Sin nombre')}</th><td>${esc(rawDate(row.intake,'submitted_on'))}</td><td>${row.submissionAge===null?'Sin fecha':row.submissionAge<0?'Fecha futura':`${row.submissionAge} días`}</td><td>${esc(row.intake.zone||'Sin registrar')}</td><td>${esc(row.intake.bono_type||'Sin registrar')}</td><td>${esc(row.intake.phone||'Sin registrar')}</td><td>${esc(row.intake.house_model||'Sin registrar')}</td><td>${esc(row.intake.observations||'')}</td></tr>`))}</details></section>`;
   }
-  const viewLabels={overview:'Resumen',intake:'Planilla',followup:'Seguimiento',detail:'Detalle'};
+  function selectReportSegment(key){
+    if(key&&!Object.hasOwn(global.BonoAnalytics?.segments||{},key))return;
+    filters.segment=key;tablePages.clear();activeView='analytics';render();
+  }
+  function analyticsHtml(rows){
+    const A=global.BonoAnalytics;if(!A)return '<p class="br-notice warning">Recargá el panel para cargar el resumen ejecutivo.</p>';
+    const data=A.analyze(rows),c=data.counts;
+    const cards=[['overdue','Metas internas vencidas',c.overdue],['due5','Faltan 0–5 días',c.due5],['due10','Faltan 6–10 días',c.due10],['observations','Observaciones recientes',c.observations],['health:error','Fallos técnicos',c.technical],['health:choose','Casos por elegir o revisar',c.choose],['withoutstates','Sin historial guardado',c.never],['stale','Último éxito de hace más de 24 h',c.stale]];
+    const groupTable=(items,key)=>table([key==='entity'?'Entidad':'Responsable','Expedientes','Formalización completada','Metas vencidas','Fallos técnicos','Casos por elegir','Sin consulta reciente','Acción'],items.map(item=>`<tr><th scope="row">${esc(item.label)}</th><td>${item.total}</td><td>${item.completed}</td><td>${item.overdue}</td><td>${item.technical}</td><td>${item.choose}</td><td>${item.withoutRecent}</td><td><button type="button" class="br-text-button" data-br-group="${key}" data-br-group-value="${esc(item.label)}">Ver grupo</button></td></tr>`));
+    const cycle=data.cycle,format=n=>n===null?'Sin datos':`${new Intl.NumberFormat('es-CR',{maximumFractionDigits:1}).format(n)} días`;
+    return `<div class="br-analytics" data-br-analytics>
+      <div class="br-analytics-heading"><div><h4>¿Qué necesita atención en esta cartera?</h4><p class="br-hint">Las cifras representan los expedientes seleccionados y sus últimos datos guardados. Las fechas de arriba filtran altas o ingresos; no miden cambios de estado dentro del período.</p></div>${filters.segment?'<button type="button" class="ghost" data-br-segment="">Quitar filtro de atención</button>':''}</div>
+      <p class="br-hint">Un expediente puede tener varios pendientes y aparecer en más de un indicador.</p><div class="br-analytics-cards">${cards.map(([key,label,value])=>`<button type="button" data-br-segment="${key}" data-br-analytic-metric="${key}" ${filters.segment===key?'aria-pressed="true"':'aria-pressed="false"'}><span>${esc(label)}</span><strong>${value}</strong><small>Ver expedientes →</small></button>`).join('')}</div>
+      <p class="br-analytics-facts"><button type="button" class="br-text-button" data-br-segment="withstates"><strong data-br-coverage>${c.withStates} de ${c.total}</strong> con estados BANHVI guardados</button> · <button type="button" class="br-text-button" data-br-segment="formalized"><strong data-br-completed>${c.completed}</strong> con formalización completada según historial o gestión interna</button> · <button type="button" class="br-text-button" data-br-segment="emitted_pending"><strong>${c.emittedPending}</strong> emitidos pendientes</button>. Los casos por elegir y las búsquedas sin resultados se distinguen de un fallo técnico.</p>
+      <div class="br-chart-grid" data-br-charts="analytics"></div>
+      <section class="br-section" data-br-action-plan><h4>Plan de atención priorizado</h4><p class="br-hint">Motivo principal por expediente. Se ordena por urgencia, prioridad asignada y antigüedad del último intento. Abrí el expediente para revisar todos sus pendientes. Las metas de formalización son internas.</p>${table(['Expediente','Entidad / responsable','Acción recomendada','Motivo','Acción'],data.actions.map(({row,action})=>`<tr data-br-priority-rank="${action.rank}"><th scope="row">${esc(row.watch.label||'Sin nombre')}<br><small>${esc(row.watch.case_number?'#'+row.watch.case_number:'Caso por obtener')}</small></th><td>${esc(row.entity)}<br><small>${esc(row.responsible)}</small></td><td>${esc(action.label)}</td><td>${esc(action.detail)}</td><td><button type="button" class="br-text-button" data-br-open="${esc(row.watch.id)}">Gestionar</button></td></tr>`),'No hay acciones prioritarias detectadas en la selección.')}</section>
+      <div class="br-grid"><section class="br-section" data-br-health-detail><h4>Salud de las consultas</h4><p class="br-hint">La referencia de 24 horas es operativa. Una consulta fallida conserva el último resultado válido; no demuestra que el estado del expediente haya cambiado.</p>${table(['Situación registrada','Expedientes','Acción'],data.healthSeries.map(item=>`<tr><th scope="row">${esc(item.label)}</th><td>${item.count}</td><td><button type="button" class="br-text-button" data-br-segment="${item.key}">Ver grupo</button></td></tr>`))}</section>
+      <section class="br-section"><h4>Tiempo observado de formalización</h4><p><strong data-br-cycle-average>${format(cycle.average)}</strong> de promedio · mediana <strong>${format(cycle.median)}</strong></p><p class="br-hint">${cycle.sample} expediente${cycle.sample===1?'':'s'} con fechas válidas de EMITIDO y FORMALIZADO en el historial consultado. Días calendario entre la última emisión y la primera formalización posterior. No incluye pendientes, fechas futuras ni estados históricos de la planilla; no fija un plazo legal.</p><button type="button" class="br-text-button" data-br-segment="cycle">Ver casos con ambas fechas</button>${table(['Hito presente en el historial','Expedientes','Acción'],data.milestones.map(item=>`<tr><th scope="row">${esc(item.label)}</th><td>${item.count}</td><td><button type="button" class="br-text-button" data-br-segment="${item.key}">Ver grupo</button></td></tr>`))}</section></div>
+      <details class="br-disclosure"><summary>Comparar entidades · ${data.entities.length} grupos</summary><section class="br-section" data-br-entity-performance><h4>Cartera por entidad</h4><p class="br-hint">Cantidades de la selección. Las diferencias pueden depender del tipo y antigüedad de los casos; no constituyen una calificación de la entidad.</p>${groupTable(data.entities,'entity')}</section></details>
+      <details class="br-disclosure"><summary>Carga por responsable · ${data.responsibles.length} grupos</summary><section class="br-section" data-br-responsible-performance><h4>Cartera por responsable</h4>${groupTable(data.responsibles,'responsible')}</section></details>
+    </div>`;
+  }
+  const viewLabels={analytics:'Resumen ejecutivo',overview:'Gestión interna',intake:'Planilla',followup:'Seguimiento',detail:'Detalle'};
   const breakdownLabels={entity:'Entidad',zone:'Zona',bonoType:'Tipo de bono',companyState:'Estado de empresa',houseModel:'Modelo de vivienda'};
   const breakdownValue=(row,key)=>key==='entity'?row.entity:text(row.intake[({zone:'zone',bonoType:'bono_type',companyState:'company_status',houseModel:'house_model'})[key]])||'Sin registrar';
   function disclosure(node,title,open=false){
@@ -175,13 +199,14 @@
     renderingTables=true;
     const clipped=value=>{const full=String(value??'');return full.length>85?full.slice(0,82)+'…':full;};
     panels.detail.innerHTML=`<section class="br-section"><h4>Detalle de expedientes</h4><p class="br-hint">La tabla usa los filtros de arriba. La exportación incluye toda la selección, independientemente de la página visible.</p>${table(['Expediente','Cédula','Entidad','Estado de empresa (planilla)','Consulta automática','Acción'],rows.map(row=>`<tr><th scope="row">${esc(row.watch.label||'Sin nombre')}</th><td>${esc(row.watch.cedula)}</td><td>${esc(row.entity)}</td><td title="${esc(row.intake.company_status||'')}">${esc(clipped(row.intake.company_status||'Sin registrar'))}</td><td title="${esc(latestConsultedState(row.watch))}">${esc(clipped(latestConsultedState(row.watch)))}</td><td><button type="button" class="br-text-button" data-br-open="${esc(row.watch.id)}">Ver expediente</button></td></tr>`))}</section>`;
+    panels.analytics.innerHTML=analyticsHtml(rows);
     renderingTables=false;
-    function activate(key,redraw=true){activeView=key;for(const [id,panel] of Object.entries(panels))panel.hidden=id!==key;nav.querySelectorAll('[data-br-view]').forEach(button=>{const selected=button.dataset.brView===key;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;});if(redraw)drawCharts(rows);}
+    function activate(key,redraw=true){activeView=key;report.querySelector('.br-kpis').classList.toggle('br-summary-kpis',key==='analytics');for(const [id,panel] of Object.entries(panels))panel.hidden=id!==key;nav.querySelectorAll('[data-br-view]').forEach(button=>{const selected=button.dataset.brView===key;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;});if(redraw)drawCharts(rows);}
     nav.querySelectorAll('[data-br-view]').forEach(button=>button.onclick=()=>activate(button.dataset.brView));
     nav.addEventListener('keydown',event=>{const buttons=[...nav.querySelectorAll('button')],index=buttons.indexOf(document.activeElement);if(index<0)return;let next;if(event.key==='ArrowRight')next=(index+1)%buttons.length;else if(event.key==='ArrowLeft')next=(index+buttons.length-1)%buttons.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=buttons.length-1;else return;event.preventDefault();buttons[next].click();buttons[next].focus();});
-    activate(Object.hasOwn(panels,activeView)?activeView:'overview',false);
+    activate(Object.hasOwn(panels,activeView)?activeView:'analytics',false);
   }
-  function chartCard(area,title,labels,values,type='bar',horizontal=false,description=''){
+  function chartCard(area,title,labels,values,type='bar',horizontal=false,description='',segments=[]){
     const figure=document.createElement('figure');figure.className='br-chart-card';
     const count=values.reduce((sum,value)=>sum+value,0);figure.innerHTML=`<figcaption><h4>${esc(title)}</h4><p>${esc(description||`${count} expedientes en la selección`)}</p></figcaption><div class="br-chart-canvas"><canvas role="img" aria-label="${esc(title)}. ${esc(labels.map((label,index)=>`${label}: ${values[index]}`).join('; '))}"></canvas></div><p class="br-chart-summary">${esc(labels.map((label,index)=>`${label}: ${values[index]}`).join(' · '))||'Sin datos para este gráfico.'}</p>`;area.append(figure);
     if(!global.Chart){const note=document.createElement('p');note.className='br-hint';note.textContent='El gráfico no está disponible. Podés consultar los valores y las tablas de detalle.';figure.querySelector('.br-chart-canvas').replaceWith(note);return;}
@@ -189,13 +214,23 @@
     const colors=['#138c78','#0b4652','#76b9a9','#dbac43','#577f91','#c27b56','#91aa79','#7499b4','#b9c8c1'];
     try{
       const config={type,data:{labels,datasets:[{label:'Expedientes',data:values,backgroundColor:type==='doughnut'?colors:labels.map((_,i)=>colors[i%colors.length]),borderWidth:0,borderRadius:type==='bar'?5:0}]},options:{responsive:true,maintainAspectRatio:false,animation:false,indexAxis:horizontal?'y':'x',plugins:{legend:{display:type==='doughnut',position:'bottom',labels:{boxWidth:10,font:{size:11}}},tooltip:{callbacks:{title:items=>items[0]?.label||''}}},scales:type==='doughnut'?{}:horizontal?{x:{beginAtZero:true,ticks:{precision:0,font:{size:10}}},y:{ticks:{font:{size:10},callback:function(value){const label=String(this.getLabelForValue(value));return label.length>28?label.slice(0,25)+'…':label;}}}}:{x:{ticks:{font:{size:10},maxRotation:0,maxTicksLimit:7}},y:{beginAtZero:true,ticks:{precision:0,font:{size:10}}}}}};
+      if(type==='doughnut'&&segments.length){
+        config.options.plugins.legend.display=false;
+        const legend=document.createElement('div');legend.className='br-chart-legend';legend.innerHTML=labels.map((label,index)=>`<button type="button" data-br-segment="${esc(segments[index])}"><i aria-hidden="true" style="background:${colors[index%colors.length]}"></i><span>${esc(label)}: <strong>${values[index]}</strong></span></button>`).join('');
+        figure.querySelector('.br-chart-canvas').after(legend);figure.querySelector('.br-chart-summary').hidden=true;
+      }
+      if(segments.length)config.options.onClick=(_,items)=>{const key=segments[items[0]?.index];if(key)selectReportSegment(key);};
       charts.push(new global.Chart(figure.querySelector('canvas'),config));
     }catch{figure.querySelector('.br-chart-canvas').innerHTML='<p class="br-empty">Consultá los valores en el detalle.</p>';}
   }
   function topSeries(rows,key){const grouped=group(rows,key),top=grouped.slice(0,8);if(grouped.length>8)top.push(['Otros (agrupados)',grouped.slice(8).flatMap(([,items])=>items)]);return{labels:top.map(([label])=>label),values:top.map(([,items])=>items.length),description:grouped.length>8?'8 categorías principales y el resto agrupado. El detalle conserva todas las categorías.':''};}
   function drawCharts(rows){
     charts.forEach(chart=>chart.destroy());charts=[];host.querySelectorAll('[data-br-charts]').forEach(area=>{area.innerHTML='';});
-    if(activeView==='overview'){
+    if(activeView==='analytics'&&global.BonoAnalytics){
+      const area=host.querySelector('[data-br-charts="analytics"]'),data=global.BonoAnalytics.analyze(rows),health=data.healthSeries.filter(item=>item.count);
+      chartCard(area,'Situación de las consultas',health.map(i=>i.label),health.map(i=>i.count),'doughnut',false,'Una categoría por expediente. Elegí un grupo en el gráfico o en el detalle.',health.map(i=>i.key));
+      chartCard(area,'Hitos observados en BANHVI',data.milestones.map(i=>i.label),data.milestones.map(i=>i.count),'bar',true,'Un expediente puede tener varios hitos. No representa conversiones ni movimientos del período.',data.milestones.map(i=>i.key));
+    }else if(activeView==='overview'){
       const area=host.querySelector('[data-br-charts="overview"]'),stages=topSeries(rows,row=>stageLabel(row.profile.workflow_stage)),entities=topSeries(rows,row=>row.entity);
       chartCard(area,'Cartera por etapa interna',stages.labels,stages.values,'doughnut',false,stages.description);chartCard(area,'Distribución por entidad',entities.labels,entities.values,'bar',true,entities.description);
     }else if(activeView==='intake'){
@@ -209,6 +244,13 @@
   }
   function captureFilters(form) {
     const values=new FormData(form);for(const key of Object.keys(filters))filters[key]=values.get(key)||filterDefaults()[key];
+  }
+  function wrapFilters(){
+    const form=host.querySelector('[data-br-filters]'),panel=document.createElement('details'),summary=document.createElement('summary');
+    panel.className='br-filter-panel';panel.open=filtersExpanded===null?global.matchMedia('(min-width:701px)').matches:filtersExpanded;
+    const selected=Object.entries(filters).filter(([key,value])=>key!=='dateBasis'&&value).length;
+    summary.textContent=`Filtros del reporte${selected?` · ${selected} activos`:''}`;form.before(panel);panel.append(summary,form);
+    panel.addEventListener('toggle',()=>{if(host.contains(panel))filtersExpanded=panel.open;});
   }
   function render() {
     if(!host||!settings)return;
@@ -224,8 +266,8 @@
     const pendingTasks=array(all.tasks).filter(t=>selected.has(t.watch_id)&&!t.completed_at).sort((a,b)=>(a.due_at?Date.parse(a.due_at):Infinity)-(b.due_at?Date.parse(b.due_at):Infinity));
     const attachedFiles=array(all.documents).filter(d=>selected.has(d.watch_id)).length;
     const canExport=typeof settings.canExport==='function'?settings.canExport():settings.canExport!==false;
-    host.innerHTML=`<div class="br-report"><header class="br-head"><div><p class="eyebrow">GESTIÓN DE CARTERA</p><h3>Reportes operativos</h3><p>Datos de los expedientes cargados · actualizado ${esc(displayDate(today()))}</p><p class="br-hint">Los estados BANHVI se obtienen automáticamente y son de solo consulta. Las etapas y tareas corresponden a la gestión interna de su empresa.</p></div>${canExport?'<div class="br-export-actions"><button type="button" class="ghost" data-br-excel>Exportar Excel</button><button type="button" class="ghost" data-br-export>Exportar reporte CSV</button></div>':''}</header>
-      <form class="br-filters" data-br-filters><label>Base de fechas<select name="dateBasis"><option value="created" ${filters.dateBasis==='created'?'selected':''}>Alta en BonoAlerta</option><option value="submitted" ${filters.dateBasis==='submitted'?'selected':''}>Ingreso a entidad (planilla)</option></select></label><label>Desde · ${filters.dateBasis==='submitted'?'ingreso en planilla':'alta en BonoAlerta'}<input type="date" name="from" value="${esc(filters.from)}"></label><label>Hasta<input type="date" name="to" value="${esc(filters.to)}"></label><label>Entidad<select name="entity">${filterOptions(entities,filters.entity,'Todas las entidades')}</select></label><label>Zona<select name="zone">${filterOptions(allIntakes.map(i=>i.zone),filters.zone,'Todas las zonas')}</select></label><label>Tipo de bono<select name="bonoType">${filterOptions(allIntakes.map(i=>i.bono_type),filters.bonoType,'Todos los tipos')}</select></label><label>Estado de empresa<select name="companyState">${filterOptions(allIntakes.map(i=>i.company_status),filters.companyState,'Todos los estados de empresa')}</select></label><button class="ghost" type="submit">Aplicar filtros</button><button class="br-text-button" type="button" data-br-reset>Limpiar</button></form>
+    host.innerHTML=`<div class="br-report"><header class="br-head"><div><p class="eyebrow">GESTIÓN DE CARTERA</p><h3>Reportes operativos</h3><p>Reporte generado con datos guardados · ${esc(displayDate(today()))}</p><p class="br-hint">Los estados BANHVI se obtienen automáticamente y son de solo consulta. Las etapas y tareas corresponden a la gestión interna de su empresa.</p></div>${canExport?'<div class="br-export-actions"><button type="button" class="ghost" data-br-excel>Exportar Excel</button><button type="button" class="ghost" data-br-export>Exportar reporte CSV</button></div>':''}</header>
+      <form class="br-filters" data-br-filters><label>Base de fechas<select name="dateBasis"><option value="created" ${filters.dateBasis==='created'?'selected':''}>Alta en BonoAlerta</option><option value="submitted" ${filters.dateBasis==='submitted'?'selected':''}>Ingreso a entidad (planilla)</option></select></label><label>Desde · ${filters.dateBasis==='submitted'?'ingreso en planilla':'alta en BonoAlerta'}<input type="date" name="from" value="${esc(filters.from)}"></label><label>Hasta<input type="date" name="to" value="${esc(filters.to)}"></label><label>Entidad<select name="entity">${filterOptions(entities,filters.entity,'Todas las entidades')}</select></label><label>Zona<select name="zone">${filterOptions(allIntakes.map(i=>i.zone),filters.zone,'Todas las zonas')}</select></label><label>Tipo de bono<select name="bonoType">${filterOptions(allIntakes.map(i=>i.bono_type),filters.bonoType,'Todos los tipos')}</select></label><label>Estado de empresa<select name="companyState">${filterOptions(allIntakes.map(i=>i.company_status),filters.companyState,'Todos los estados de empresa')}</select></label><label>Responsable<select name="responsible">${filterOptions(scopedWatches(all).map(w=>w.assigned_to||'Sin responsable'),filters.responsible,'Todos los responsables')}</select></label><label>Atención o hito<select name="segment"><option value="">Toda la selección</option>${Object.entries(global.BonoAnalytics?.segments||{}).map(([key,label])=>`<option value="${key}" ${filters.segment===key?'selected':''}>${esc(label)}</option>`).join('')}</select></label><button class="ghost" type="submit">Aplicar filtros</button><button class="br-text-button" type="button" data-br-reset>Limpiar</button></form>
       ${filters.from&&filters.to&&filters.from>filters.to?'<p class="br-notice warning" role="status">La fecha inicial debe ser anterior a la fecha final.</p>':''}
       <div class="br-kpis"><article><span>En la selección</span><strong>${rows.length}</strong><small>${rows.filter(r=>r.watch.enabled).length} con monitoreo activo</small></article><article><span>Atención prioritaria</span><strong>${urgent.length}</strong><small>Errores, vencimientos o hitos atrasados</small></article><article><span>Documentación completa</span><strong>${totalDocs?`${percent(completeDocs,totalDocs)}%`:'—'}</strong><small>${completeDocs} de ${totalDocs} requisitos aplicables · ${attachedFiles} archivos adjuntos</small></article><article><span>Promedio por etapa finalizada</span><strong>${esc(average)}</strong><small>${duration.length} transiciones registradas</small></article></div>
       ${intakeReports(rows)}
@@ -238,13 +280,18 @@
       <section class="br-section"><h4>Próximas acciones y alertas</h4>${table(['Expediente','Etapa','Pendientes','Responsable','Acción'],overdue.map(r=>`<tr><th scope="row">${esc(r.watch.label||'Sin nombre')}</th><td>${esc(stageLabel(r.profile.workflow_stage))}</td><td>${r.issues.map(i=>`<span class="br-tag ${i.kind}">${esc(i.text)}</span>`).join(' ')}</td><td>${esc(r.responsible)}</td><td><button type="button" class="br-text-button" data-br-open="${esc(r.watch.id)}">Gestionar</button></td></tr>`),'No hay pendientes operativos en la selección.')}</section>
       <section class="br-section"><h4>Construcción e inspecciones</h4>${table(['Expediente','Avance registrado','Presupuesto aprobado','Desembolsado','Inspecciones','Acción'],rows.filter(r=>r.profile.workflow_stage==='construction'||array(r.profile.construction?.inspections).length).map(r=>{const c=r.profile.construction||{};return `<tr><th scope="row">${esc(r.watch.label||'Sin nombre')}</th><td>${Math.min(100,Math.max(0,Number(c.progress)||0))}%</td><td>${esc(money(c.approved_budget))}</td><td>${esc(money(array(c.disbursements).reduce((a,v)=>a+(Number(v.amount)||0),0)))}</td><td>${array(c.inspections).length}</td><td><button type="button" class="br-text-button" data-br-open="${esc(r.watch.id)}">Ver obra</button></td></tr>`;}),'Todavía no hay obras o inspecciones registradas.')}</section>
       <p class="br-hint">Etapas, fechas y avances internos son registros de su empresa. Los estados BANHVI se conservan por separado.</p></div>`;
-    renderingTables=false;layoutReports(rows);bindPagedTables();drawCharts(rows);
+    renderingTables=false;wrapFilters();layoutReports(rows);bindPagedTables();drawCharts(rows);
     host.querySelector('[data-br-filters]').onsubmit=event=>{event.preventDefault();tablePages.clear();captureFilters(event.currentTarget);render();};
     host.querySelector('[name="dateBasis"]').onchange=event=>{tablePages.clear();captureFilters(event.target.form);render();};
     host.querySelector('[data-br-reset]').onclick=()=>{Object.assign(filters,filterDefaults());tablePages.clear();render();};
     host.querySelectorAll('[data-br-open]').forEach(button=>button.onclick=()=>settings.onOpen?.(button.dataset.brOpen));
     const exportButton=host.querySelector('[data-br-export]');if(exportButton)exportButton.onclick=exportCsv;
     const excelButton=host.querySelector('[data-br-excel]');if(excelButton)excelButton.onclick=exportExcel;
+    host.onclick=event=>{
+      const segment=event.target.closest('[data-br-segment]');if(segment&&host.contains(segment)){selectReportSegment(segment.dataset.brSegment);return;}
+      const button=event.target.closest('[data-br-group]');if(!button||!host.contains(button)||!['entity','responsible'].includes(button.dataset.brGroup))return;
+      filters[button.dataset.brGroup]=button.dataset.brGroupValue;tablePages.clear();activeView='analytics';render();
+    };
   }
   function exportCsv() {
     if(typeof settings.canExport==='function'?!settings.canExport():settings.canExport===false)return;
@@ -255,9 +302,9 @@
     const csv=[headers,...rows.map(r=>[...reportValues(r),...intakeValues(r).slice(2)])].map(row=>row.map(cell).join(';')).join('\r\n');
     const url=URL.createObjectURL(new Blob(['\ufeff',csv],{type:'text/csv;charset=utf-8;'})),link=document.createElement('a');link.href=url;link.download=`bonoalerta-reporte-${today()}.csv`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);settings.toast?.('Reporte descargado.');
   }
-  const reportHeaders=['Referencia','Caso BANHVI','Modalidad','Etapa interna','Entidad','Responsable','Días en etapa','Documentos aplicables','Documentos completos','Documentos vencidos','Fecha meta interna','Días restantes','Pendientes'];
+  const reportHeaders=['Referencia','Caso BANHVI','Modalidad','Etapa interna','Entidad','Responsable','Días en etapa','Documentos aplicables','Documentos completos','Documentos vencidos','Fecha meta interna','Días restantes','Pendientes','Situación de consulta','Última consulta exitosa (ISO)','Horas desde último éxito','Estados de la última fecha BANHVI','Acción recomendada','Prioridad de atención'];
   const intakeHeaders=['Referencia','Cédula','Categoría de planilla','Entidad','Tipo de bono registrado','Zona','Ingreso a entidad (planilla)','Texto original de ingreso','Días desde ingreso a entidad','Alta en BonoAlerta','Estado BANHVI en planilla','Fecha estado de planilla','Texto original fecha estado','Estado de empresa','Consulta automática (última fecha)','Teléfono','Modelo de vivienda','Color interno','Color externo','Color canoa','Color marco de ventana','Color tablilla PVC','Observación/cotización','Inicio construcción (planilla)','Texto original inicio','Finalización construcción (planilla)','Texto original finalización','Inspecciones (planilla)','Tarea (planilla)','Fecha tarea (planilla)','Texto original fecha tarea','Observaciones','Origen hoja y fila'];
-  const reportValues = r => [r.watch.label,r.watch.case_number||'',modalityLabel(r.profile.modality),stageLabel(r.profile.workflow_stage),r.entity,r.responsible,r.daysInStage,r.docs.total,r.docs.complete,r.docs.expired,r.deadline&&!r.deadline.completed?r.deadline.deadline||r.deadline.date:'',r.deadline&&!r.deadline.completed?r.deadline.days:'',r.issues.map(i=>i.text).join(' · ')];
+  const reportValues = r => [r.watch.label,r.watch.case_number||'',modalityLabel(r.profile.modality),stageLabel(r.profile.workflow_stage),r.entity,r.responsible,r.daysInStage,r.docs.total,r.docs.complete,r.docs.expired,r.deadline&&!r.deadline.completed?r.deadline.deadline||r.deadline.date:'',r.deadline&&!r.deadline.completed?r.deadline.days:'',r.issues.map(i=>i.text).join(' · '),global.BonoAnalytics?.healthLabels[global.BonoAnalytics.health(r)]||'',r.watch.last_success_at||'',global.BonoAnalytics?.ageHours(r)?.toFixed(1)||'',latestConsultedState(r.watch),global.BonoAnalytics?.action(r)?.label||'',global.BonoAnalytics?.action(r)?.rank??''];
   function intakeValues(row) {
     const i=row.intake;
     return [row.watch.label,row.watch.cedula,categoryLabel(i.category),row.entity,i.bono_type,i.zone,day(i.submitted_on)!==null?i.submitted_on:'',i.submitted_on_text,row.submissionAge,dateISO(row.watch.created_at),i.reported_status,day(i.reported_status_on)!==null?i.reported_status_on:'',i.reported_status_on_text,i.company_status,latestConsultedState(row.watch),i.phone,i.house_model,i.internal_color,i.external_color,i.gutter_color,i.window_frame_color,i.pvc_color,i.quote_notes,day(i.construction_started_on)!==null?i.construction_started_on:'',i.construction_started_on_text,day(i.construction_completed_on)!==null?i.construction_completed_on:'',i.construction_completed_on_text,i.inspections,i.task_text,day(i.task_due_on)!==null?i.task_due_on:'',i.task_due_on_text,i.observations,sourceLabel(i)];
@@ -269,8 +316,31 @@
     // Every value is explicitly text. Imported cédulas keep leading zeroes and
     // spreadsheet-looking text can never become a formula in this workbook.
     const worksheet=(name,headers,values)=>`<Worksheet ss:Name="${xml(name)}"><Table>${headers.map(()=>'<Column ss:Width="150"/>').join('')}<Row ss:StyleID="Header">${headers.map(value=>`<Cell><Data ss:Type="String">${xml(value)}</Data></Cell>`).join('')}</Row>${values.map(row=>`<Row>${row.map(value=>`<Cell><Data ss:Type="String">${xml(value)}</Data></Cell>`).join('')}</Row>`).join('')}</Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>1</SplitHorizontal><TopRowBottomPane>1</TopRowBottomPane></WorksheetOptions></Worksheet>`;
-    const workbook=`<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#0B3B47" ss:Pattern="Solid"/></Style></Styles>${worksheet('Reporte',reportHeaders,rows.map(reportValues))}${worksheet('Detalle planilla',intakeHeaders,rows.map(intakeValues))}</Workbook>`;
+    const workbook=`<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#0B3B47" ss:Pattern="Solid"/></Style></Styles>${worksheet('Reporte',reportHeaders,rows.map(reportValues))}${worksheet('Detalle planilla',intakeHeaders,rows.map(intakeValues))}${worksheet('Resumen gestión',['Indicador','Valor','Criterio'],summaryValues(rows))}</Workbook>`;
     const url=URL.createObjectURL(new Blob([workbook],{type:'application/vnd.ms-excel;charset=utf-8;'})),link=document.createElement('a');link.href=url;link.download=`bonoalerta-reporte-${today()}.xls`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);settings.toast?.('Excel descargado con la selección actual.');
+  }
+  function summaryValues(rows){
+    const data=global.BonoAnalytics?.analyze(rows);if(!data)return[];
+    const c=data.counts;
+    return[
+      ['Expedientes en la selección',c.total,'Según filtros de alta/ingreso, entidad, responsable y atención'],
+      ['Monitoreo activo',c.active,'Indicador de habilitación, no de consulta exitosa'],
+      ['Con historial consultado',c.withStates,'Al menos un estado BANHVI válido guardado'],
+      ['Formalización completada',c.completed,'Según historial consultado o gestión interna'],
+      ['Emitidos pendientes',c.emittedPending,'Historial con emisión y formalización sin completar'],
+      ['Metas internas vencidas',c.overdue,'No formalizados y días restantes negativos'],
+      ['Metas: faltan 0–5 días',c.due5,'Rango inclusivo; meta configurable por expediente'],
+      ['Metas: faltan 6–10 días',c.due10,'Rango inclusivo; meta configurable por expediente'],
+      ['Observaciones recientes BANHVI',c.observations,'En la última fecha del historial consultado'],
+      ['Fallos técnicos',c.technical,'Excluye elección de caso, identidad y ausencia de resultados'],
+      ['Casos por revisar o elegir',c.choose,'Requieren selección o revisión del vínculo'],
+      ['Sin resultados en última búsqueda',c.notfound,'No demuestra ausencia definitiva del expediente'],
+      ['Promedio EMITIDO a FORMALIZADO',data.cycle.average===null?'Sin datos':data.cycle.average.toFixed(1),'Días calendario; solo pares de fechas válidas'],
+      ['Mediana EMITIDO a FORMALIZADO',data.cycle.median===null?'Sin datos':data.cycle.median.toFixed(1),'Días calendario; no incluye pendientes'],
+      ['Muestra para tiempo de formalización',data.cycle.sample,'Expedientes con ambas fechas observadas y ordenadas'],
+      ...data.healthSeries.map(item=>[item.label,item.count,'Categorías excluyentes de situación registrada']),
+      ...data.milestones.map(item=>['Historial con '+item.label,item.count,'Los hitos pueden repetirse entre los mismos expedientes'])
+    ];
   }
   function educationHtml() {
     return `<section class="br-education"><h3>Entienda el proceso de su bono de vivienda</h3><details><summary>¿Qué significa cada etapa?</summary><p>Su asesor reúne los documentos, la entidad autorizada revisa la solicitud y la presenta al BANHVI. Después pueden existir gestiones de aprobación, emisión, formalización y, según la modalidad, construcción e inspecciones.</p><p>Un estado de seguimiento describe una gestión. La resolución y los requisitos definitivos corresponden a la entidad autorizada y al BANHVI.</p></details><details><summary>¿Qué documentos debo preparar?</summary><p>Los requisitos dependen de su familia, la propiedad y la modalidad. Su asesor puede solicitar identificaciones, constancias de ingresos, certificaciones y documentos de la propiedad. Para construir o reparar también pueden requerirse presupuesto, planos, permisos e informes técnicos.</p><p>Entregue los documentos por el canal seguro indicado por su asesor y confirme cuáles deben renovarse.</p></details><details><summary>¿El bono tiene costo?</summary><p>El bono es una ayuda estatal. El proceso puede generar gastos autorizados, por ejemplo avalúos, planos, inspecciones y trámites legales. Solicite un desglose y comprobantes a la entidad antes de efectuar pagos.</p></details><details><summary>¿Qué hago después de la emisión?</summary><p>Consulte a su asesor y a la entidad qué firmas, documentos y gestiones de formalización debe completar. Las fechas aplicables se deben confirmar para su expediente.</p></details><p class="br-hint">Información general. Consulte las <a href="https://www.mivah.go.cr/Preguntas_Frecuentes.shtml" target="_blank" rel="noopener noreferrer">preguntas frecuentes del MIVAH</a> y los <a href="https://www.banhvi.fi.cr/publicaciones/capacitacion/DeberesyDerechos.aspx" target="_blank" rel="noopener noreferrer">deberes y derechos publicados por BANHVI</a>. BonoAlerta es un servicio independiente.</p></section>`;
