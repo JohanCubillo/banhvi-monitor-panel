@@ -97,6 +97,8 @@ function queuedCheckHtml(w){
 }
 const monitorFilters={
   __unattempted:{label:'Sin primer intento',matches:w=>w.enabled&&!w.last_attempt_at&&!w.last_success_at&&!w.last_error},
+  __technical:{label:'Fallos técnicos',matches:w=>w.enabled&&w.last_error&&!['CASE_NOT_FOUND','CASE_SELECTION_REQUIRED','CASE_IDENTITY_CHANGED'].includes(w.last_error)},
+  __case_review:{label:'Casos por revisar',matches:w=>w.enabled&&['CASE_SELECTION_REQUIRED','CASE_IDENTITY_CHANGED'].includes(w.last_error)},
   __pending_success:{label:'Sin consulta exitosa',matches:w=>w.enabled&&!w.last_success_at&&!w.last_states?.length},
   __queued:{label:'En cola',matches:w=>w.enabled&&checkRequests.some(r=>r.watch_id===w.id&&r.status==='pending')}
 };
@@ -468,7 +470,41 @@ async function submitPrivacyRequest(event){
 
 async function loadPlatform(){
   if(!isPlatformAdmin)return;
-  const [organizations,members,invites]=await Promise.all([readRows('monitor_organizations'),readRows('monitor_organization_members'),readRows('monitor_member_invites')]);
+  const viewer=sessionUser?.id;
+  const runLabel=$('#platform-monitor-run'), companies=$('#platform-monitor-companies');
+  runLabel.textContent='Cargando estado del monitor…';
+  companies.replaceChildren();
+  const [organizations,members,invites,overview]=await Promise.all([readRows('monitor_organizations'),readRows('monitor_organization_members'),readRows('monitor_member_invites'),client.rpc('platform_monitor_overview')]);
+  if(!isPlatformAdmin||sessionUser?.id!==viewer)return;
+  const run=overview.data?.latest_run;
+  if(overview.error)runLabel.textContent='Estado del monitor pendiente de activación.';
+  else if(!run)runLabel.textContent='El historial aparecerá cuando termine el primer lote general con registro habilitado.';
+  else{
+    const remaining=run.selected-run.completed-run.technical_failures-run.unresolved;
+    const result=run.timed_out?'Lote interrumpido por tiempo':run.failed?'Lote con incidencias':'Lote finalizado';
+    runLabel.textContent=`${result} · ${formatDate(run.finished_at)}. ${run.selected} seleccionados, ${run.completed} completados, ${run.technical_failures} fallos técnicos, ${run.unresolved} sin resultado o por revisar y ${remaining} sin intentar. Fallos de envío: ${run.delivery_failures}.`;
+  }
+  for(const company of overview.data?.companies||[]){
+    const group=document.createElement('section');
+    group.className='monitor-health';
+    const heading=document.createElement('h4');
+    heading.textContent=company.name;
+    const actions=document.createElement('div');
+    actions.className='welcome-actions';
+    for(const [key,filter] of [['unattempted','__unattempted'],['technical','__technical'],['review','__case_review']]){
+      const button=document.createElement('button');
+      button.type='button';button.className='ghost';
+      button.textContent=`${monitorFilters[filter].label} · ${company[key]}`;
+      button.onclick=async()=>{
+        if(!isPlatformAdmin||!sessionOrganizations.some(o=>o.id===company.id&&o.active))return;
+        await selectOrganization(company.id);
+        if(isPlatformAdmin&&currentOrganization?.id===company.id)showMonitorFilter(filter);
+      };
+      actions.append(button);
+    }
+    group.append(heading,actions);
+    companies.append(group);
+  }
   if(organizations.error||members.error||invites.error){toast('No se pudieron actualizar las empresas y accesos');return;}
   platformManager.render(organizations.data,members.data,invites.data);
 }
@@ -478,6 +514,7 @@ async function openAdminView(view){
   $('#admin-summary').classList.toggle('hidden',!['summary','cases'].includes(view)||!currentOrganization);
   $('#operations-reports').classList.toggle('hidden',view!=='reports'||!currentOrganization);
   $('#platform-admin').classList.toggle('hidden',view!=='platform');
+  $('#platform-monitor').classList.toggle('hidden',view!=='platform'||!isPlatformAdmin);
   document.querySelectorAll('[data-admin-view]').forEach(button=>{const selected=button.dataset.adminView===view;button.classList.toggle('selected',selected);if(selected)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
   if(view==='platform')await loadPlatform();else if(view==='reports')operationsReports.render();else if(view==='cases')$('#watch-list').scrollIntoView({behavior:'smooth',block:'start'});
 }
@@ -529,13 +566,14 @@ async function showSession(session){
 $('#login-form').addEventListener('submit',signIn);$('#reset-password-btn').onclick=requestPasswordReset;$('#magic-link-btn').onclick=()=>requestMagicLink(false);$('#activate-access-btn').onclick=()=>requestMagicLink(true);$('#organization-picker').onchange=event=>selectOrganization(event.target.value);$('#password-form').addEventListener('submit',saveNewPassword); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=()=>currentAdminView==='platform'?loadPlatform():loadData(); $('#logout-btn').onclick=()=>client.auth.signOut(); $('#search').addEventListener('input',e=>renderWatches(e.target.value));
 $('#export-btn').onclick=exportExcel;
 ['#status-filter','#priority-filter','#emitted-filter','#deadline-filter','#modality-filter','#stage-filter','#official-status-filter','#case-sort'].forEach(selector=>$(selector).onchange=()=>renderWatches($('#search').value));
-document.querySelectorAll('[data-monitor-filter]').forEach(button=>button.onclick=()=>{
+function showMonitorFilter(filter){
   $('#search').value='';
   ['#status-filter','#priority-filter','#emitted-filter','#deadline-filter','#modality-filter','#stage-filter'].forEach(selector=>$(selector).value='');
-  $('#official-status-filter').value=button.dataset.monitorFilter;
+  $('#official-status-filter').value=filter;
   renderWatches();
   void openAdminView('cases');
-});
+}
+document.querySelectorAll('[data-monitor-filter]').forEach(button=>button.onclick=()=>showMonitorFilter(button.dataset.monitorFilter));
 $('#new-modality').innerHTML=BonoCase.modalities.map(m=>`<option value="${m.id}">${escapeHtml(m.label)}</option>`).join('');
 $('#modality-filter').innerHTML='<option value="">Todas las modalidades</option>'+$('#new-modality').innerHTML;
 $('#stage-filter').innerHTML='<option value="">Todas las etapas internas</option>'+BonoCase.stages.map(s=>`<option value="${s.id}">Gestión interna: ${escapeHtml(s.label)}</option>`).join('');
