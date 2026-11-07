@@ -670,7 +670,7 @@ if(adminMode&&!clientMode){
   function setAdminTheme(dark){
     document.documentElement.classList.toggle('admin-dark',dark);
     themeButton.setAttribute('aria-pressed',String(dark));
-    themeButton.textContent=dark?'Modo claro':'Modo oscuro';
+    themeButton.title=dark?'Activar modo claro':'Activar modo oscuro';
   }
   setAdminTheme(localStorage.getItem('bonoalerta-admin-theme')!=='light');
   themeButton.onclick=()=>{
