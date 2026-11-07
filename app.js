@@ -597,7 +597,19 @@ $('#defer-consultation-refresh').onclick=()=>{
   $('#consultation-refresh').classList.add('hidden');
 };
 $('#export-btn').onclick=exportExcel;
-['#status-filter','#priority-filter','#emitted-filter','#deadline-filter','#modality-filter','#stage-filter','#official-status-filter','#case-sort'].forEach(selector=>$(selector).onchange=()=>renderWatches($('#search').value));
+['#status-filter','#priority-filter','#deadline-filter','#modality-filter','#stage-filter','#case-sort'].forEach(selector=>$(selector).onchange=()=>renderWatches($('#search').value));
+const isFormalizedFilter=()=>/^FORMALIZAD[OA]$/i.test($('#official-status-filter').value);
+$('#emitted-filter').onchange=()=>{
+  if($('#emitted-filter').value==='pending'&&isFormalizedFilter())$('#official-status-filter').value='';
+  renderWatches($('#search').value);
+};
+$('#official-status-filter').onchange=()=>{
+  if(isFormalizedFilter()){
+    if($('#emitted-filter').value==='pending')$('#emitted-filter').value='';
+    $('#deadline-filter').value='';
+  }
+  renderWatches($('#search').value);
+};
 function showMonitorFilter(filter){
   $('#search').value='';
   ['#status-filter','#priority-filter','#emitted-filter','#deadline-filter','#modality-filter','#stage-filter'].forEach(selector=>$(selector).value='');
