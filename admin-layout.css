@@ -184,3 +184,7 @@
 .consultation-health details { margin-top: 8px; }
 .consultation-health summary { width: fit-content; cursor: pointer; font-weight: 700; color: var(--teal); }
 .consultation-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+@media (min-width: 561px) {
+  .daily-metrics, #admin-cases > .metrics { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}

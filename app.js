@@ -267,7 +267,6 @@ function render() {
   official.value=['__unread','__choose'].includes(selected)||Object.hasOwn(monitorFilters,selected)||labels.includes(selected)?selected:'';
   $('#metric-total').textContent=watches.length;
   $('#metric-active').textContent=watches.filter(w=>w.enabled).length;
-  $('#metric-changes').textContent=events.length;
   $('#metric-errors').textContent=watches.filter(w=>trafficStatus(w)==='red').length;
   renderWatches($('#search').value);
   renderActivity();
@@ -370,9 +369,16 @@ async function requestWatchCheck(id,button){
 }
 
 function renderActivity(){
-  const range=paginationRange(activityPagination,events.length),pageEvents=events.slice(range.start,range.end);
-  $('#activity-list').innerHTML=events.length?pageEvents.map(e=>{const w=watches.find(x=>x.id===e.watch_id);return `<div class="activity"><span class="activity-dot"></span><div><p><strong>${escapeHtml(w?.label||'Expediente')}</strong> registró un cambio de estado.</p><small>${e.status==='sent'?'Correo enviado':e.status==='review_required'?'Requiere revisión':'Notificación pendiente'}</small></div><small>${escapeHtml(formatDate(e.created_at))}</small></div>`}).join(''):'<div class="empty">Todavía no hay cambios nuevos. Todo permanece estable.</div>';
-  renderPagination('#activity-pagination',activityPagination,events.length,renderActivity,{label:'actividad reciente'});
+  const now=new Date(),today=BonoCase.todayISO(now);
+  const isToday=value=>Number.isFinite(Date.parse(value))&&BonoCase.todayISO(new Date(value))===today;
+  const dailyEvents=events.filter(event=>isToday(event.created_at));
+  $('#summary-date').textContent=new Intl.DateTimeFormat('es-CR',{dateStyle:'full',timeZone:'America/Costa_Rica'}).format(now);
+  $('#metric-reviewed-today').textContent=watches.filter(watch=>isToday(watch.last_success_at)).length;
+  $('#metric-changes').textContent=dailyEvents.length;
+  $('#metric-sent-today').textContent=events.filter(event=>isToday(event.sent_at)).length;
+  const range=paginationRange(activityPagination,dailyEvents.length),pageEvents=dailyEvents.slice(range.start,range.end);
+  $('#activity-list').innerHTML=dailyEvents.length?pageEvents.map(e=>{const w=watches.find(x=>x.id===e.watch_id);return `<div class="activity"><span class="activity-dot"></span><div><p><strong>${escapeHtml(w?.label||'Expediente')}</strong> registró un cambio de estado.</p><small>${e.status==='sent'?'Correo enviado':e.status==='review_required'?'Requiere revisión':'Notificación pendiente'}</small></div><small>${escapeHtml(formatDate(e.created_at))}</small></div>`}).join(''):'<div class="empty">Todavía no hay cambios registrados hoy.</div>';
+  renderPagination('#activity-pagination',activityPagination,dailyEvents.length,renderActivity,{label:'actividad de hoy'});
 }
 
 function stateDifference(before=[], after=[]) {
@@ -545,12 +551,14 @@ async function loadPlatform(){
 async function openAdminView(view){
   if(view==='platform'&&!isPlatformAdmin)return;
   currentAdminView=view;
-  $('#admin-summary').classList.toggle('hidden',!['summary','cases'].includes(view)||!currentOrganization);
-  $('#operations-reports').classList.toggle('hidden',view!=='reports'||!currentOrganization);
+  $('#admin-summary').classList.toggle('hidden',view!=='summary'||!currentOrganization);
+  $('#admin-cases').classList.toggle('hidden',view!=='cases'||!currentOrganization);
+  $('#admin-reports').classList.toggle('hidden',view!=='reports'||!currentOrganization);
   $('#platform-admin').classList.toggle('hidden',view!=='platform');
   $('#platform-monitor').classList.toggle('hidden',view!=='platform'||!isPlatformAdmin);
   document.querySelectorAll('[data-admin-view]').forEach(button=>{const selected=button.dataset.adminView===view;button.classList.toggle('selected',selected);if(selected)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
-  if(view==='platform')await loadPlatform();else if(view==='reports')operationsReports.render();else if(view==='cases')$('#watch-list').scrollIntoView({behavior:'smooth',block:'start'});
+  if(view==='platform')await loadPlatform();else if(view==='reports')operationsReports.render();else if(view==='summary')renderActivity();
+  window.scrollTo(0,0);
 }
 function clearCompanyData(){
   consultationBaselineReady=false;dismissedConsultations='';pendingConsultations='';

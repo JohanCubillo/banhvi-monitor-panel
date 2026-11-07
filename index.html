@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="operations-reports.css?v=20261104-reports1">
   <link rel="stylesheet" href="workbook-import.css?v=20261031">
   <link rel="stylesheet" href="platform-admin.css?v=20261029">
-  <link rel="stylesheet" href="admin-layout.css?v=20261107-3">
+  <link rel="stylesheet" href="admin-layout.css?v=20261107-4">
 </head>
 <body>
   <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
@@ -118,7 +118,13 @@
           <div class="welcome-actions"><button type="button" id="accept-consultation-refresh" class="primary compact">Actualizar ahora</button><button type="button" id="defer-consultation-refresh" class="ghost">Ahora no</button></div>
         </aside>
         <div id="case-feature-message" class="form-note hidden" role="status"></div>
-        <div id="admin-summary">
+        <section id="admin-summary" class="hidden" aria-labelledby="daily-summary-title">
+          <div class="welcome"><div><p class="eyebrow" id="summary-date"></p><h2 id="daily-summary-title">Resumen del día</h2><p id="user-greeting">Buenos días</p></div></div>
+          <div class="metrics daily-metrics">
+            <article><span>Expedientes consultados hoy</span><strong id="metric-reviewed-today">0</strong><small>con un resultado de BANHVI</small></article>
+            <article><span>Cambios detectados hoy</span><strong id="metric-changes">0</strong><small>registrados por el monitor</small></article>
+            <article><span>Alertas enviadas hoy</span><strong id="metric-sent-today">0</strong><small>por correo</small></article>
+          </div>
         <section class="monitor-health consultation-health" aria-labelledby="consultation-health-title">
           <h3 id="consultation-health-title">Consultas a BANHVI</h3>
           <p id="monitor-health" role="status"></p>
@@ -134,35 +140,34 @@
             </div>
           </details>
         </section>
-        <div class="welcome"><div><p class="eyebrow">RESUMEN GENERAL</p><h2 id="user-greeting">Buenos días</h2><p>Revisiones programadas cada 30 minutos, de 7:17 a. m. a 7:17 p. m. Las ejecuciones pueden retrasarse.</p></div><div class="welcome-actions"><button id="import-btn" class="ghost">Importar Excel / CSV</button><button id="export-btn" class="ghost">Exportar a Excel</button><button id="open-add" class="primary compact">+ Nuevo expediente</button><input id="import-file" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden></div></div>
-
-        <div class="metrics">
-          <article><span>Expedientes</span><strong id="metric-total">0</strong><small>registrados</small></article>
-          <article><span>Monitoreo activo</span><strong id="metric-active">0</strong><small>en seguimiento</small></article>
-          <article><span>Cambios detectados</span><strong id="metric-changes">0</strong><small>históricos</small></article>
-          <article><span>Requieren atención</span><strong id="metric-errors">0</strong><small>vencidos o con error</small></article>
-        </div>
-
+        <section class="panel timeline-panel">
+          <div class="panel-head"><div><h3>Actividad de hoy</h3><p>Cambios de estado registrados hoy.</p></div></div>
+          <div id="activity-list" class="activity-list"><div class="empty">Todavía no hay cambios registrados hoy.</div></div>
+          <div id="activity-pagination"></div>
+        </section>
+        </section>
+        <section id="admin-cases" class="hidden" aria-labelledby="admin-cases-title">
+          <div class="welcome"><div><h2 id="admin-cases-title">Expedientes</h2><p>Administrá los expedientes y consultá sus estados de BANHVI.</p></div><div class="welcome-actions"><button id="import-btn" class="ghost">Importar Excel / CSV</button><button id="export-btn" class="ghost">Exportar a Excel</button><button id="open-add" class="primary compact">+ Nuevo expediente</button><input id="import-file" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden></div></div>
+          <div class="metrics">
+            <article><span>Expedientes</span><strong id="metric-total">0</strong><small>registrados</small></article>
+            <article><span>Monitoreo activo</span><strong id="metric-active">0</strong><small>en seguimiento</small></article>
+            <article><span>Requieren atención</span><strong id="metric-errors">0</strong><small>vencidos o con error</small></article>
+          </div>
         <section class="panel">
           <div class="panel-head"><div><h3>Expedientes monitoreados</h3><p>Estado obtenido automáticamente de BANHVI · solo consulta.</p></div><div class="filters"><div class="search-wrap"><input id="search" type="search" placeholder="Buscar nombre, cédula, caso o estado"></div><select id="emitted-filter" aria-label="Filtrar por estado emitido"><option value="">Todos los expedientes</option><option value="yes">Con EMITIDO</option><option value="no">Sin EMITIDO</option><option value="completed">Formalización completada</option><option value="pending" selected>Emitidos pendientes de formalizar</option></select><select id="deadline-filter" aria-label="Filtrar por días restantes"><option value="">Cualquier plazo</option><option value="expired">Plazo vencido</option><option value="0-5">Faltan 0–5 días</option><option value="6-10">Faltan 6–10 días</option><option value="11-30">Faltan 11–30 días</option><option value="31+">Faltan más de 30 días</option></select><select id="priority-filter" aria-label="Filtrar por prioridad"><option value="">Toda prioridad</option><option value="urgent">Urgente</option><option value="high">Alta</option><option value="normal">Normal</option><option value="low">Baja</option></select><select id="status-filter" aria-label="Filtrar por semáforo"><option value="">Cualquier atención</option><option value="red">Requieren atención</option><option value="yellow">Atención pendiente</option><option value="green">Al día</option></select></div></div>
           <div class="case-extra-filters"><select id="official-status-filter" aria-label="Estado actual BANHVI"><option value="">Todos los estados BANHVI</option></select><select id="case-sort" aria-label="Ordenar expedientes"><option value="created">Más recientes</option><option value="deadline">Prioridad por meta de emitidos</option></select><details class="advanced-case-filters"><summary>Filtros avanzados</summary><div><select id="modality-filter" aria-label="Modalidad"></select><select id="stage-filter" aria-label="Etapa interna"></select></div></details></div>
           <div id="watch-list" class="watch-list"><div class="empty">Cargando expedientes…</div></div>
           <div id="watch-pagination"></div>
         </section>
-
-        <section class="panel timeline-panel">
-          <div class="panel-head"><div><h3>Actividad reciente</h3><p>Cambios y notificaciones registrados.</p></div></div>
-          <div id="activity-list" class="activity-list"><div class="empty">Sin actividad reciente.</div></div>
-          <div id="activity-pagination"></div>
         </section>
-
+        <div id="admin-reports" class="hidden">
+          <section id="operations-reports" aria-label="Reportes operativos"></section>
         <section id="compliance-panel" class="panel hidden">
           <div class="panel-head"><div><h3>Privacidad y auditoría</h3><p>Consentimientos, solicitudes y movimientos registrados.</p></div></div>
           <div class="compliance-metrics"><article><strong id="metric-consents">0</strong><span>consentimientos</span></article><article><strong id="metric-privacy-requests">0</strong><span>solicitudes pendientes</span></article><article><strong id="metric-audit">0</strong><span>acciones auditadas</span></article></div>
           <div id="privacy-request-list" class="activity-list"><div class="empty">Sin solicitudes pendientes.</div></div>
         </section>
         </div>
-        <section id="operations-reports" class="hidden" aria-label="Reportes operativos"></section>
         <section id="platform-monitor" class="panel hidden" aria-label="Estado del monitor">
           <div class="panel-head"><div><h3>Estado del monitor</h3><p id="platform-monitor-run" role="status"></p></div></div>
           <div class="monitor-health" id="platform-monitor-companies"></div>
@@ -258,6 +263,6 @@
   <script src="report-analytics.js?v=20261104-1"></script>
   <script src="operations-reports.js?v=20261104-reports1"></script>
   <script src="platform-admin.js?v=20261029-2"></script>
-  <script src="app.js?v=20261107-8"></script>
+  <script src="app.js?v=20261107-9"></script>
 </body>
 </html>
