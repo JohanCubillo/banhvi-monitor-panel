@@ -117,19 +117,6 @@
             <button type="button" class="ghost" data-monitor-filter="__queued">En cola</button>
           </div>
         </section>
-        <details id="monitor-billing" class="monitor-health hidden">
-          <summary>Consumo mensual de GitHub Actions</summary>
-          <p id="monitor-billing-status" role="status"></p>
-          <p><a href="https://github.com/settings/billing" target="_blank" rel="noopener noreferrer">Abrir facturación de GitHub</a></p>
-          <form id="monitor-billing-form">
-            <div class="filters">
-              <label>Mes de facturación<input name="month" type="month" required></label>
-              <label>Crédito incluido (USD)<input name="included" type="number" min="0.01" max="999999" step="0.01" required></label>
-              <label>Crédito usado (USD)<input name="used" type="number" min="0" max="999999" step="0.01" required></label>
-            </div>
-            <button class="ghost" type="submit">Guardar saldo de GitHub</button>
-          </form>
-        </details>
         <div class="welcome"><div><p class="eyebrow">RESUMEN GENERAL</p><h2 id="user-greeting">Buenos días</h2><p>Revisiones programadas cada 30 minutos, de 7:17 a. m. a 7:17 p. m. Las ejecuciones pueden retrasarse.</p></div><div class="welcome-actions"><button id="import-btn" class="ghost">Importar Excel / CSV</button><button id="export-btn" class="ghost">Exportar a Excel</button><button id="open-add" class="primary compact">+ Nuevo expediente</button><input id="import-file" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden></div></div>
 
         <div class="metrics">
@@ -249,6 +236,6 @@
   <script src="report-analytics.js?v=20261104-1"></script>
   <script src="operations-reports.js?v=20261104-reports1"></script>
   <script src="platform-admin.js?v=20261029-2"></script>
-  <script src="app.js?v=20261107-1"></script>
+  <script src="app.js?v=20261107-2"></script>
 </body>
 </html>

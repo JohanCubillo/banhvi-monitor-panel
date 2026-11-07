@@ -111,49 +111,6 @@ function renderMonitorHealth(){
     button.textContent=`${filter.label} · ${watches.filter(filter.matches).length}`;
   });
 }
-const billingMonth=()=>new Date().toISOString().slice(0,7);
-const billingMoney=new Intl.NumberFormat('es-CR',{style:'currency',currency:'USD'});
-let billingLoadSequence=0;
-async function loadMonitorBilling(){
-  const section=$('#monitor-billing'), status=$('#monitor-billing-status'), form=$('#monitor-billing-form');
-  const sequence=++billingLoadSequence;
-  section.classList.toggle('hidden',!isPlatformAdmin);
-  if(!isPlatformAdmin){form.reset();status.textContent='';return;}
-  const viewer=sessionUser?.id;
-  form.elements.month.max=billingMonth();
-  const month=form.elements.month.value||billingMonth();
-  form.elements.month.value=month;
-  form.elements.included.value='';
-  form.elements.used.value='';
-  status.textContent='Cargando saldo guardado…';
-  const {data,error}=await client.rpc('get_monitor_billing',{p_month:`${month}-01`});
-  if(sequence!==billingLoadSequence||!isPlatformAdmin||sessionUser?.id!==viewer||form.elements.month.value!==month)return;
-  if(error){status.textContent='No se pudo cargar el saldo. Verificá que la migración de consumo esté instalada.';return;}
-  const snapshot=data?.[0];
-  if(!snapshot){status.textContent='Todavía no hay una captura del saldo de este mes.';return;}
-  form.elements.included.value=snapshot.included_usd;
-  form.elements.used.value=snapshot.used_usd;
-  const {included_usd:included,used_usd:used}=snapshot;
-  const alert=used>=included?' Crédito incluido agotado.':used>=included*0.8?' Queda 20 % o menos del crédito incluido.':'';
-  status.textContent=`${billingMoney.format(Math.max(0,included-used))} disponibles de ${billingMoney.format(included)}. Usado: ${billingMoney.format(used)}. Captura manual guardada el ${formatDate(snapshot.recorded_at)}.${alert}`;
-}
-async function saveMonitorBilling(event){
-  event.preventDefault();
-  if(!isPlatformAdmin)return;
-  const form=event.currentTarget, status=$('#monitor-billing-status'), button=form.querySelector('button');
-  const viewer=sessionUser?.id;
-  button.disabled=true;
-  try{
-    const {error}=await client.rpc('save_monitor_billing',{
-      p_month:`${form.elements.month.value}-01`,
-      p_included:Number(form.elements.included.value),
-      p_used:Number(form.elements.used.value)
-    });
-    if(!isPlatformAdmin||sessionUser?.id!==viewer)return;
-    if(error){status.textContent='No se pudo guardar el saldo de GitHub.';return;}
-    await loadMonitorBilling();
-  }finally{button.disabled=false;}
-}
 function toast(text){ const el=$('#toast'); el.textContent=text; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
 
 async function signIn(event) {
@@ -263,8 +220,6 @@ async function loadData() {
     consents=consentResult.data||[];privacyRequests=requestResult.data||[];auditEvents=auditResult.data||[];
   }
   render();
-  await loadMonitorBilling();
-  if(sequence!==loadSequence)return;
   $('#sync-status').innerHTML='<i></i> Datos del panel actualizados';
   if(eventResult.error||noteResult.error||taskResult.error||documentResult.error){$('#sync-status').textContent='Carga incompleta';toast('Algunos detalles no se pudieron actualizar');}
 }
@@ -527,10 +482,6 @@ async function openAdminView(view){
   if(view==='platform')await loadPlatform();else if(view==='reports')operationsReports.render();else if(view==='cases')$('#watch-list').scrollIntoView({behavior:'smooth',block:'start'});
 }
 function clearCompanyData(){
-  billingLoadSequence++;
-  $('#monitor-billing').classList.add('hidden');
-  $('#monitor-billing-form').reset();
-  $('#monitor-billing-status').textContent='';
   watchPagination.page=1;watchPagination.pageSize=10;watchPagination.criteria='';activityPagination.page=1;activityPagination.pageSize=10;
   loadSequence++;watches=[];events=[];checkRequests=[];caseChoices=[];notes=[];tasks=[];documents=[];caseProfiles=[];consents=[];privacyRequests=[];auditEvents=[];currentWatchId=null;intakeAvailable=false;workbookImporter.invalidate();
   $('#detail-dialog').close();$('#add-dialog').close();closeClientPreview();caseManager.close();render();
@@ -578,8 +529,6 @@ async function showSession(session){
 $('#login-form').addEventListener('submit',signIn);$('#reset-password-btn').onclick=requestPasswordReset;$('#magic-link-btn').onclick=()=>requestMagicLink(false);$('#activate-access-btn').onclick=()=>requestMagicLink(true);$('#organization-picker').onchange=event=>selectOrganization(event.target.value);$('#password-form').addEventListener('submit',saveNewPassword); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=()=>currentAdminView==='platform'?loadPlatform():loadData(); $('#logout-btn').onclick=()=>client.auth.signOut(); $('#search').addEventListener('input',e=>renderWatches(e.target.value));
 $('#export-btn').onclick=exportExcel;
 ['#status-filter','#priority-filter','#emitted-filter','#deadline-filter','#modality-filter','#stage-filter','#official-status-filter','#case-sort'].forEach(selector=>$(selector).onchange=()=>renderWatches($('#search').value));
-$('#monitor-billing-form').addEventListener('submit',saveMonitorBilling);
-$('#monitor-billing-form').elements.month.addEventListener('change',loadMonitorBilling);
 document.querySelectorAll('[data-monitor-filter]').forEach(button=>button.onclick=()=>{
   $('#search').value='';
   ['#status-filter','#priority-filter','#emitted-filter','#deadline-filter','#modality-filter','#stage-filter'].forEach(selector=>$(selector).value='');
