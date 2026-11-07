@@ -187,6 +187,29 @@ async function readRows(table,columns='*',configure=q=>q,order='created_at'){
 async function readWatchRows(table,columns,ids,order='created_at'){
   const data=[];for(let offset=0;offset<ids.length;offset+=80){const result=await readRows(table,columns,q=>q.in('watch_id',ids.slice(offset,offset+80)),order);if(result.error)return result;data.push(...result.data);}return{data:data.sort((a,b)=>String(b[order]||'').localeCompare(String(a[order]||''))),error:null};
 }
+let dismissedConsultations='',pendingConsultations='',checkingConsultations=false,consultationBaselineReady=false;
+
+async function checkForConsultationResults(){
+  const organizationId=currentOrganization?.id,sequence=loadSequence;
+  if(!organizationId||!consultationBaselineReady||checkingConsultations||document.hidden||appView.classList.contains('hidden'))return;
+  checkingConsultations=true;
+  try{
+    const result=await readRows('monitor_watches','id,last_attempt_at,last_success_at',q=>q.eq('organization_id',organizationId),'id');
+    if(result.error||sequence!==loadSequence||organizationId!==currentOrganization?.id)return;
+    const displayed=new Map(watches.map(w=>[w.id,w]));
+    const changed=result.data.filter(w=>{
+      const previous=displayed.get(w.id);
+      return previous&&(w.last_attempt_at!==previous.last_attempt_at||w.last_success_at!==previous.last_success_at);
+    });
+    pendingConsultations=JSON.stringify(changed.map(w=>[w.id,w.last_attempt_at,w.last_success_at]).sort());
+    $('#consultation-refresh').classList.toggle('hidden',!changed.length||pendingConsultations===dismissedConsultations);
+  }catch{
+    // Keep the panel usable if the check cannot reach the server.
+  }finally{
+    checkingConsultations=false;
+  }
+}
+
 async function loadData() {
   if(!currentOrganization?.active)return;
   const organizationId=currentOrganization.id,sequence=++loadSequence;
@@ -222,6 +245,8 @@ async function loadData() {
     consents=consentResult.data||[];privacyRequests=requestResult.data||[];auditEvents=auditResult.data||[];
   }
   render();
+  consultationBaselineReady=true;
+  $('#consultation-refresh').classList.add('hidden');
   $('#sync-status').innerHTML='<i></i> Datos del panel actualizados';
   if(eventResult.error||noteResult.error||taskResult.error||documentResult.error){$('#sync-status').textContent='Carga incompleta';toast('Algunos detalles no se pudieron actualizar');}
 }
@@ -519,6 +544,8 @@ async function openAdminView(view){
   if(view==='platform')await loadPlatform();else if(view==='reports')operationsReports.render();else if(view==='cases')$('#watch-list').scrollIntoView({behavior:'smooth',block:'start'});
 }
 function clearCompanyData(){
+  consultationBaselineReady=false;dismissedConsultations='';pendingConsultations='';
+  $('#consultation-refresh').classList.add('hidden');
   watchPagination.page=1;watchPagination.pageSize=10;watchPagination.criteria='';activityPagination.page=1;activityPagination.pageSize=10;
   loadSequence++;watches=[];events=[];checkRequests=[];caseChoices=[];notes=[];tasks=[];documents=[];caseProfiles=[];consents=[];privacyRequests=[];auditEvents=[];currentWatchId=null;intakeAvailable=false;workbookImporter.invalidate();
   $('#detail-dialog').close();$('#add-dialog').close();closeClientPreview();caseManager.close();render();
@@ -564,6 +591,11 @@ async function showSession(session){
 }
 
 $('#login-form').addEventListener('submit',signIn);$('#reset-password-btn').onclick=requestPasswordReset;$('#magic-link-btn').onclick=()=>requestMagicLink(false);$('#activate-access-btn').onclick=()=>requestMagicLink(true);$('#organization-picker').onchange=event=>selectOrganization(event.target.value);$('#password-form').addEventListener('submit',saveNewPassword); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=()=>currentAdminView==='platform'?loadPlatform():loadData(); $('#logout-btn').onclick=()=>client.auth.signOut(); $('#search').addEventListener('input',e=>renderWatches(e.target.value));
+$('#accept-consultation-refresh').onclick=()=>loadData();
+$('#defer-consultation-refresh').onclick=()=>{
+  dismissedConsultations=pendingConsultations;
+  $('#consultation-refresh').classList.add('hidden');
+};
 $('#export-btn').onclick=exportExcel;
 ['#status-filter','#priority-filter','#emitted-filter','#deadline-filter','#modality-filter','#stage-filter','#official-status-filter','#case-sort'].forEach(selector=>$(selector).onchange=()=>renderWatches($('#search').value));
 function showMonitorFilter(filter){
@@ -615,7 +647,7 @@ if(demoContent){
   document.querySelectorAll('[data-demo-tab]').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('[data-demo-tab]').forEach(item=>item.classList.toggle('active',item===button));demoContent.innerHTML=demoViews[button.dataset.demoTab]||demoSummary;}));
 }
 if(clientMode){landingView.classList.add('hidden');loginView.classList.add('hidden');appView.classList.add('hidden');$('#client-public-view').classList.remove('hidden');$('#client-search-form').addEventListener('submit',searchClientCase);$('#open-privacy').onclick=()=>$('#privacy-dialog').showModal();$('#close-privacy').onclick=()=>$('#privacy-dialog').close();$('#open-rights').onclick=()=>$('#rights-dialog').showModal();$('#close-rights').onclick=()=>$('#rights-dialog').close();$('#rights-form').addEventListener('submit',submitPrivacyRequest);$('#client-new-search').onclick=async()=>{$('#client-result').classList.add('hidden');$('#client-search-panel').classList.remove('hidden');$('#client-search-form').reset();verifiedClientCase=null;await client.auth.signOut();};const pending=JSON.parse(localStorage.getItem('banhvi-client-pending')||'null');if(pending){$('#client-email').value=pending.email;$('#client-cedula').value=pending.cedula;$('#client-case').value=pending.caseNumber;$('#client-consent').checked=!!pending.consent;}client.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_IN'&&session&&pending)setTimeout(()=>searchClientCase(),0);});client.auth.getSession().then(({data})=>{if(data.session&&pending)searchClientCase();});}
-else if(adminMode){landingView.classList.add('hidden');loginView.classList.remove('hidden');client.auth.onAuthStateChange((event,session)=>{
+else if(adminMode){setInterval(checkForConsultationResults,60_000);landingView.classList.add('hidden');loginView.classList.remove('hidden');client.auth.onAuthStateChange((event,session)=>{
   if(event==='PASSWORD_RECOVERY'){passwordRecoveryMode=true;setTimeout(()=>openPasswordDialog(session,'recovery'),0);return;}
   if(activationMode&&event==='SIGNED_IN'&&initialActivation.verifiedCallback){
     const expectedEmail=sessionStorage.getItem('bonoalerta-activation');
@@ -624,6 +656,8 @@ else if(adminMode){landingView.classList.add('hidden');loginView.classList.remov
     }
     activationVerificationAccepted=true;
   }
+  if(!activationMode&&!passwordRecoveryMode&&session?.user?.id===sessionUser?.id&&sessionUser&&
+    (event==='SIGNED_IN'||event==='TOKEN_REFRESHED'))return;
   setTimeout(()=>showSession(session),0);
 });client.auth.getSession().then(({data})=>showSession(data.session));}
 else{loginView.classList.add('hidden');appView.classList.add('hidden');landingView.classList.remove('hidden');}

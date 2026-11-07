@@ -52,6 +52,11 @@
   function requirementsFor(modality) {
     return (modalities.find(m=>m.id===modality)||modalities[0]).requirements.map(item=>({...item}));
   }
+  const isFormalizedState=state=>/^(FORMALIZADO|FORMALIZADA)$/i.test(String(state.description||'').trim());
+  function officialFormalizationDate(watch={}){
+    const dates=(watch.last_states||[]).filter(isFormalizedState).map(state=>parseDate(state.date)).filter(date=>date!==null);
+    return dates.length?isoDay(Math.max(...dates)):null;
+  }
   function formalizationInfo(watch={},profile={},now=new Date()) {
     const stateDates=(Array.isArray(watch.last_states)?watch.last_states:[])
       .filter(s=>String(s.description||'').trim().toUpperCase()==='EMITIDO')
@@ -63,7 +68,7 @@
     const totalDays=Number.isInteger(raw)&&raw>=1&&raw<=3650?raw:90;
     const today=parseDate(todayISO(now));
     const completed=formalizationComplete(watch,profile);
-    const end=parseDate(profile.formalized_on||profile.registered_on)||today;
+    const end=parseDate(officialFormalizationDate(watch)||profile.formalized_on||profile.registered_on)||today;
     return {emittedDate:isoDay(start),date:isoDay(start+totalDays),deadline:isoDay(start+totalDays),days:start+totalDays-today,elapsed:Math.max(0,end-start),totalDays,completed,label:'Meta interna de formalización'};
   }
   function checklistStats(checklist=[],now=new Date()) {
@@ -90,7 +95,7 @@
   }
   function formalizationComplete(watch={},profile={}){
     return Boolean(profile.formalized_on||profile.registered_on||['construction','closed'].includes(profile.workflow_stage)||
-      (watch.last_states||[]).some(s=>/^(FORMALIZADO|FORMALIZADA)$/i.test(String(s.description||'').trim())));
+      (watch.last_states||[]).some(isFormalizedState));
   }
   const normalizeSearch=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
   function matchesCaseSearch(watch={},profile={},query=''){
@@ -103,5 +108,5 @@
       watch.last_error==='CASE_SELECTION_REQUIRED'?'varios casos pendiente de elegir caso revisión de casos':'',
       info?.elapsed,info?.days].some(value=>normalizeSearch(value).includes(q));
   }
-  scope.BonoCase={modalities,stages,requirementsFor,profileDefaults,formalizationInfo,formalizationComplete,matchesCaseSearch,normalizeSearch,checklistStats,evaluatePrequalification,parseDate,todayISO,isoDay};
+  scope.BonoCase={modalities,stages,requirementsFor,profileDefaults,officialFormalizationDate,formalizationInfo,formalizationComplete,matchesCaseSearch,normalizeSearch,checklistStats,evaluatePrequalification,parseDate,todayISO,isoDay};
 })(globalThis);
