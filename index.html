@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="operations-reports.css?v=20261104-reports1">
   <link rel="stylesheet" href="workbook-import.css?v=20261031">
   <link rel="stylesheet" href="platform-admin.css?v=20261029">
-  <link rel="stylesheet" href="admin-layout.css?v=20261107">
+  <link rel="stylesheet" href="admin-layout.css?v=20261107-2">
 </head>
 <body>
   <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
@@ -101,12 +101,18 @@
 
     <section id="app-view" class="app-shell hidden">
       <header class="topbar">
+        <button id="admin-menu-toggle" type="button" class="ghost" aria-controls="admin-sidebar" aria-expanded="false"><i class="bi bi-list" aria-hidden="true"></i> Menú</button>
         <div class="brand company-brand"><img class="brand-logo" src="assets/bonoalerta-logo-v1.png" alt="BonoAlerta" width="2172" height="724" decoding="async"><div class="company-brand-details"><strong id="organization-name">Monitor BANHVI</strong><small id="organization-plan">Panel de seguimiento</small></div></div>
-        <div class="top-actions"><label class="organization-picker hidden" id="organization-picker-label">Empresa<select id="organization-picker" aria-label="Empresa actual"></select></label><span id="sync-status" class="sync"><i></i> Datos del panel</span><button id="refresh-btn" class="ghost">Actualizar</button><button id="theme-btn" type="button" class="ghost" aria-pressed="false">Modo oscuro</button><button id="logout-btn" class="ghost">Salir</button></div>
+        <div class="top-actions"><label class="organization-picker hidden" id="organization-picker-label">Empresa<select id="organization-picker" aria-label="Empresa actual"></select></label><span id="sync-status" class="sync"><i></i> Datos del panel</span><button id="refresh-btn" type="button" class="ghost"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Actualizar</button><button id="theme-btn" type="button" class="ghost" aria-pressed="false">Modo oscuro</button><button id="logout-btn" type="button" class="ghost"><i class="bi bi-box-arrow-right" aria-hidden="true"></i> Salir</button></div>
       </header>
 
-      <div class="content">
-        <nav class="admin-navigation" aria-label="Panel administrativo"><button type="button" class="ghost selected" data-admin-view="summary" aria-current="page">Resumen</button><button type="button" class="ghost" data-admin-view="cases">Expedientes</button><button type="button" class="ghost" data-admin-view="reports">Reportes y alertas</button><button type="button" id="platform-navigation" class="ghost hidden" data-admin-view="platform">Empresas y accesos</button></nav>
+      <div class="admin-workspace">
+        <aside class="admin-sidebar" id="admin-sidebar">
+          <p class="eyebrow">PANEL ADMINISTRATIVO</p>
+        <nav class="admin-navigation" aria-label="Panel administrativo"><button type="button" class="ghost selected" data-admin-view="summary" aria-current="page"><i class="bi bi-grid" aria-hidden="true"></i><span>Resumen</span></button><button type="button" class="ghost" data-admin-view="cases"><i class="bi bi-folder2-open" aria-hidden="true"></i><span>Expedientes</span></button><button type="button" class="ghost" data-admin-view="reports"><i class="bi bi-bar-chart" aria-hidden="true"></i><span>Reportes y alertas</span></button><button type="button" id="platform-navigation" class="ghost hidden" data-admin-view="platform"><i class="bi bi-people" aria-hidden="true"></i><span>Empresas y accesos</span></button></nav>
+        </aside>
+        <div class="content">
+
         <aside id="consultation-refresh" class="monitor-health hidden" aria-label="Actualización de consultas BANHVI">
           <p role="status">Hay resultados nuevos de consultas a BANHVI. ¿Querés actualizar el panel?</p>
           <div class="welcome-actions"><button type="button" id="accept-consultation-refresh" class="primary compact">Actualizar ahora</button><button type="button" id="defer-consultation-refresh" class="ghost">Ahora no</button></div>
@@ -156,6 +162,7 @@
           <div class="monitor-health" id="platform-monitor-companies"></div>
         </section>
         <section id="platform-admin" class="hidden" aria-label="Empresas y accesos"></section>
+        </div>
       </div>
     </section>
   </main>
@@ -245,6 +252,6 @@
   <script src="report-analytics.js?v=20261104-1"></script>
   <script src="operations-reports.js?v=20261104-reports1"></script>
   <script src="platform-admin.js?v=20261029-2"></script>
-  <script src="app.js?v=20261107-6"></script>
+  <script src="app.js?v=20261107-7"></script>
 </body>
 </html>

@@ -622,7 +622,25 @@ $('#new-modality').innerHTML=BonoCase.modalities.map(m=>`<option value="${m.id}"
 $('#modality-filter').innerHTML='<option value="">Todas las modalidades</option>'+$('#new-modality').innerHTML;
 $('#stage-filter').innerHTML='<option value="">Todas las etapas internas</option>'+BonoCase.stages.map(s=>`<option value="${s.id}">Gestión interna: ${escapeHtml(s.label)}</option>`).join('');
 $('#client-education').innerHTML=BonoReports.educationHtml();
-document.querySelectorAll('[data-admin-view]').forEach(button=>button.onclick=()=>openAdminView(button.dataset.adminView));
+const adminMenuToggle=$('#admin-menu-toggle');
+function setAdminMenu(open){
+  adminMenuToggle.setAttribute('aria-expanded',String(open));
+  $('#admin-sidebar').classList.toggle('menu-open',open);
+}
+adminMenuToggle.onclick=()=>setAdminMenu(adminMenuToggle.getAttribute('aria-expanded')!=='true');
+appView.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&adminMenuToggle.offsetWidth&&adminMenuToggle.getAttribute('aria-expanded')==='true'){
+    setAdminMenu(false);
+    adminMenuToggle.focus();
+  }
+});
+document.querySelectorAll('[data-admin-view]').forEach(button=>button.onclick=()=>{
+  if(adminMenuToggle.offsetWidth){
+    setAdminMenu(false);
+    adminMenuToggle.focus();
+  }
+  openAdminView(button.dataset.adminView);
+});
 $('#print-case').onclick=()=>{const w=watches.find(w=>w.id===currentWatchId);if(w)BonoReports.printCase(w,profileFor(w)||{},notes,documents,tasks);};
 $('#import-btn').onclick=()=>$('#import-file').click();$('#import-file').onchange=event=>{const file=event.target.files[0];if(file)workbookImporter.open(file);event.target.value='';};
 $('#save-management').onclick=saveManagement;$('#send-client-access').onclick=sendClientAccess;$('#note-form').addEventListener('submit',addNote);$('#task-form').addEventListener('submit',addTask);$('#document-form').addEventListener('submit',uploadDocument);
