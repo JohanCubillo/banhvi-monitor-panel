@@ -228,3 +228,31 @@
 @media (min-width: 561px) {
   .daily-metrics, #admin-cases > .metrics { grid-template-columns: repeat(3,minmax(0,1fr)); }
 }
+
+#app-view #logout-btn { margin-inline-start: 12px; }
+.daily-charts { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(0,1fr); gap: 14px; margin-bottom: 20px; }
+.daily-chart { margin: 0; padding: 20px; }
+.daily-chart h3 { margin: 0; font-size: 16px; }
+.daily-chart p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.daily-chart-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 12px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: 12px; }
+.daily-chart-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; }
+.chart-change { background: var(--teal); }
+.chart-alert { background: #b68539; }
+.weekly-activity-chart { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 4px; margin: 26px 0 0; padding: 0; list-style: none; }
+.weekly-activity-chart li { min-width: 0; text-align: center; color: var(--muted); }
+.weekly-activity-chart small { font-size: 11px; }
+.weekly-bars { display: flex; justify-content: center; align-items: end; gap: 3px; height: 84px; border-bottom: 1px solid var(--line); }
+.weekly-bars > div { position: relative; width: min(14px,44%); height: var(--bar-height); border-radius: 3px 3px 0 0; }
+.weekly-bars span { position: absolute; inset-inline-start: 50%; bottom: 100%; transform: translateX(-50%); font-size: 10px; line-height: 1.4; color: var(--ink); }
+.monthly-coverage-count { display: block; margin-top: 22px; font-size: clamp(19px,2.4vw,32px); }
+#monthly-coverage { display: block; width: 100%; height: 14px; margin: 10px 0; accent-color: var(--teal); }
+@media (max-width: 850px) {
+  .daily-charts { grid-template-columns: minmax(0,1fr); }
+  #app-view #logout-btn { margin-inline-start: 6px; }
+}
+@media (max-width: 400px) {
+  #app-view .topbar { padding-inline: 6px; gap: 2px 4px; }
+  .header-logo { width: 76px; }
+  #app-view .top-actions .header-action { min-width: 34px; padding-inline: 6px; }
+  .daily-chart { padding-inline: 14px; }
+}

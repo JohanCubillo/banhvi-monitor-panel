@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="operations-reports.css?v=20261104-reports1">
   <link rel="stylesheet" href="workbook-import.css?v=20261031">
   <link rel="stylesheet" href="platform-admin.css?v=20261029">
-  <link rel="stylesheet" href="admin-layout.css?v=20261107-5">
+  <link rel="stylesheet" href="admin-layout.css?v=20261107-6">
 </head>
 <body>
   <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
@@ -110,12 +110,12 @@
         <img class="brand-logo header-logo" src="assets/bonoalerta-logo-v1.png" alt="BonoAlerta" width="2172" height="724" decoding="async">
         <div class="top-actions">
           <span id="sync-status" class="sync" role="status"><i></i> Datos del panel</span>
-          <button id="refresh-btn" type="button" class="header-action" aria-label="Actualizar" title="Actualizar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 4v5h-5m4.3 0a8 8 0 1 0 .7 5"/></svg><span>Actualizar</span></button>
+          <button id="refresh-btn" type="button" class="header-action" aria-label="Actualizar" title="Actualizar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 4v5h-5m4.3 0a8 8 0 1 0 .7 5"/></svg></button>
           <button id="theme-btn" type="button" class="header-action" aria-label="Modo oscuro" title="Activar modo oscuro" aria-pressed="false">
             <svg class="theme-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.9 13.3A9 9 0 1 1 10.7 3.1a7.1 7.1 0 0 0 10.2 10.2Z"/></svg>
             <svg class="theme-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg>
           </button>
-          <button id="logout-btn" type="button" class="header-action" aria-label="Salir" title="Salir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H5v16h5m-1-8h12m-4-4 4 4-4 4"/></svg><span>Salir</span></button>
+          <button id="logout-btn" type="button" class="header-action" aria-label="Salir" title="Salir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H5v16h5m-1-8h12m-4-4 4 4-4 4"/></svg></button>
         </div>
       </header>
 
@@ -137,6 +137,21 @@
             <article><span>Expedientes consultados hoy</span><strong id="metric-reviewed-today">0</strong><small>con un resultado de BANHVI</small></article>
             <article><span>Cambios detectados hoy</span><strong id="metric-changes">0</strong><small>registrados por el monitor</small></article>
             <article><span>Alertas enviadas hoy</span><strong id="metric-sent-today">0</strong><small>por correo</small></article>
+          </div>
+          <div class="daily-charts">
+            <section class="panel daily-chart" aria-labelledby="weekly-activity-title">
+              <h3 id="weekly-activity-title">Actividad de los últimos 7 días</h3>
+              <p>Detectados y enviados por el monitor.</p>
+              <ul class="daily-chart-legend"><li><i class="chart-change"></i> Cambios de estado</li><li><i class="chart-alert"></i> Alertas por correo</li></ul>
+              <ul id="weekly-activity-chart" class="weekly-activity-chart"></ul>
+            </section>
+            <section class="panel daily-chart" aria-labelledby="monthly-coverage-title">
+              <h3 id="monthly-coverage-title">Cobertura de consultas del mes</h3>
+              <p id="monthly-period"></p>
+              <strong id="monthly-coverage-count" class="monthly-coverage-count"></strong>
+              <progress id="monthly-coverage" max="1" value="0" aria-labelledby="monthly-coverage-title" aria-describedby="monthly-coverage-count"></progress>
+              <p>Expedientes activos con al menos una consulta exitosa en el mes.</p>
+            </section>
           </div>
         <section class="monitor-health consultation-health" aria-labelledby="consultation-health-title">
           <h3 id="consultation-health-title">Consultas a BANHVI</h3>
@@ -276,6 +291,6 @@
   <script src="report-analytics.js?v=20261104-1"></script>
   <script src="operations-reports.js?v=20261104-reports1"></script>
   <script src="platform-admin.js?v=20261029-2"></script>
-  <script src="app.js?v=20261107-10"></script>
+  <script src="app.js?v=20261107-11"></script>
 </body>
 </html>

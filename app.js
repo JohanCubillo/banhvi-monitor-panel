@@ -368,14 +368,51 @@ async function requestWatchCheck(id,button){
   finally{if(organizationId===currentOrganization?.id)renderWatches($('#search').value);}
 }
 
+function renderSummaryCharts(today, eventsByDay, alertsByDay){
+  const date=new Date(today+'T12:00:00Z');
+  const weekday=new Intl.DateTimeFormat('es-CR',{weekday:'short',timeZone:'UTC'});
+  const week=Array.from({length:7},(_,index)=>{
+    const day=new Date(date);
+    day.setUTCDate(date.getUTCDate()-6+index);
+    const key=day.toISOString().slice(0,10);
+    return {label:weekday.format(day),day:day.getUTCDate(),changes:eventsByDay.get(key)||0,alerts:alertsByDay.get(key)||0};
+  });
+  const peak=Math.max(1,...week.flatMap(day=>[day.changes,day.alerts]));
+  $('#weekly-activity-chart').innerHTML=week.map(({label,day,changes,alerts})=>`
+    <li aria-label="${label} ${day}. ${changes} cambios de estado, ${alerts} alertas por correo">
+      <div class="weekly-bars" aria-hidden="true">
+        <div class="chart-change" style="--bar-height:${changes/peak*100}%"><span>${changes}</span></div>
+        <div class="chart-alert" style="--bar-height:${alerts/peak*100}%"><span>${alerts}</span></div>
+      </div>
+      <small>${label} ${day}</small>
+    </li>`).join('');
+
+  const month=today.slice(0,7);
+  const active=watches.filter(watch=>watch.enabled);
+  const consulted=active.filter(watch=>Number.isFinite(Date.parse(watch.last_success_at))&&BonoCase.todayISO(watch.last_success_at).startsWith(month)).length;
+  $('#monthly-period').textContent=new Intl.DateTimeFormat('es-CR',{month:'long',year:'numeric',timeZone:'UTC'}).format(date);
+  $('#monthly-coverage-count').textContent=active.length?`${consulted} de ${active.length}`:'Sin expedientes activos';
+  const coverage=$('#monthly-coverage');
+  coverage.max=active.length||1;
+  coverage.value=consulted;
+}
+
 function renderActivity(){
   const now=new Date(),today=BonoCase.todayISO(now);
-  const isToday=value=>Number.isFinite(Date.parse(value))&&BonoCase.todayISO(new Date(value))===today;
+  const dayOf=value=>Number.isFinite(Date.parse(value))?BonoCase.todayISO(value):'';
+  const isToday=value=>dayOf(value)===today;
+  const eventsByDay=new Map(),alertsByDay=new Map();
+  for(const event of events){
+    const created=dayOf(event.created_at),sent=dayOf(event.sent_at);
+    if(created)eventsByDay.set(created,(eventsByDay.get(created)||0)+1);
+    if(sent)alertsByDay.set(sent,(alertsByDay.get(sent)||0)+1);
+  }
   const dailyEvents=events.filter(event=>isToday(event.created_at));
   $('#summary-date').textContent=new Intl.DateTimeFormat('es-CR',{dateStyle:'full',timeZone:'America/Costa_Rica'}).format(now);
   $('#metric-reviewed-today').textContent=watches.filter(watch=>isToday(watch.last_success_at)).length;
   $('#metric-changes').textContent=dailyEvents.length;
-  $('#metric-sent-today').textContent=events.filter(event=>isToday(event.sent_at)).length;
+  $('#metric-sent-today').textContent=alertsByDay.get(today)||0;
+  renderSummaryCharts(today,eventsByDay,alertsByDay);
   const range=paginationRange(activityPagination,dailyEvents.length),pageEvents=dailyEvents.slice(range.start,range.end);
   $('#activity-list').innerHTML=dailyEvents.length?pageEvents.map(e=>{const w=watches.find(x=>x.id===e.watch_id);return `<div class="activity"><span class="activity-dot"></span><div><p><strong>${escapeHtml(w?.label||'Expediente')}</strong> registró un cambio de estado.</p><small>${e.status==='sent'?'Correo enviado':e.status==='review_required'?'Requiere revisión':'Notificación pendiente'}</small></div><small>${escapeHtml(formatDate(e.created_at))}</small></div>`}).join(''):'<div class="empty">Todavía no hay cambios registrados hoy.</div>';
   renderPagination('#activity-pagination',activityPagination,dailyEvents.length,renderActivity,{label:'actividad de hoy'});
