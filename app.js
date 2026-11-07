@@ -586,6 +586,20 @@ $('#open-client-preview').onclick=openClientPreview;$('#close-client-preview').o
 const routeParams=new URLSearchParams(location.search);
 const clientMode=Boolean(routeParams.get('cliente'));
 const adminMode=routeParams.get('admin')==='1';
+if(adminMode&&!clientMode){
+  const themeButton=$('#theme-btn');
+  function setAdminTheme(dark){
+    document.documentElement.classList.toggle('admin-dark',dark);
+    themeButton.setAttribute('aria-pressed',String(dark));
+    themeButton.textContent=dark?'Modo claro':'Modo oscuro';
+  }
+  setAdminTheme(localStorage.getItem('bonoalerta-admin-theme')!=='light');
+  themeButton.onclick=()=>{
+    const dark=!document.documentElement.classList.contains('admin-dark');
+    setAdminTheme(dark);
+    localStorage.setItem('bonoalerta-admin-theme',dark?'dark':'light');
+  };
+}
 function renderAuthMode(){const active=activationMode;$('#auth-description').textContent=active?'Verificá el correo al que el superadministrador asignó tu empresa. Después podrás elegir una contraseña.':'Ingresá a la empresa que te asignó el administrador.';$('#password').required=!active;$('#password').classList.toggle('hidden',active);document.querySelector('label[for="password"]').classList.toggle('hidden',active);$('#login-form button[type="submit"]').textContent=active?'Verificar correo y activar acceso':'Ingresar →';$('#activate-access-btn').classList.toggle('hidden',active);}
 renderAuthMode();
 const demoContent=$('#demo-preview-content');

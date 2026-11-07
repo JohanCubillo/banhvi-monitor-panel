@@ -1,0 +1,96 @@
+/* Administrative list and controls */
+#app-view .welcome > .welcome-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  width: auto;
+  gap: 8px;
+}
+#app-view .welcome > .welcome-actions button { flex: 0 0 auto; white-space: nowrap; }
+#app-view .watch-list { container-type: inline-size; }
+.watch-row { grid-template-columns: minmax(0,1fr) minmax(0,.7fr) minmax(0,1.2fr) auto minmax(150px,auto); }
+.watch-row > * { min-width: 0; overflow-wrap: anywhere; }
+.watch-row .watch-icon { flex-shrink: 0; }
+.watch-row .row-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  justify-content: stretch;
+  max-width: none;
+  gap: 6px;
+}
+.watch-row .row-actions button { min-height: 38px; font-size: 13px; }
+.watch-row .row-actions [data-detail] { grid-column: 1; grid-row: 1; font-weight: 700; }
+.watch-row .row-actions [data-toggle] { grid-column: 2; grid-row: 1; }
+.watch-row .row-actions [data-check] { grid-column: 1 / -1; grid-row: 2; }
+#search { min-width: 0; }
+#app-view .filters { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); width: min(100%,680px); }
+#app-view .filters > * { width: 100%; min-width: 0; }
+#app-view .search-wrap { grid-column: 1 / -1; }
+.case-extra-filters { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.case-extra-filters select { width: 100%; min-width: 0; }
+.advanced-case-filters { grid-column: 1 / -1; }
+.advanced-case-filters summary { cursor: pointer; width: fit-content; color: var(--teal); font-weight: 700; }
+.advanced-case-filters > div { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin-top: 12px; }
+#theme-btn { white-space: nowrap; }
+@container (max-width: 860px) {
+  .watch-row { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .watch-row > .cell:nth-child(2) { grid-column: auto; }
+  .watch-row > .cell:nth-child(3), .watch-row .row-actions { grid-column: 1 / -1; }
+  .watch-row .row-actions { display: flex; justify-content: flex-start; }
+  .watch-row .row-actions [data-check] { flex-basis: auto; }
+}
+@container (max-width: 480px) {
+  .watch-row { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width: 600px) {
+  #app-view .filters, .case-extra-filters, .advanced-case-filters > div { grid-template-columns: minmax(0,1fr); }
+  #app-view .top-actions .ghost:first-of-type { display: inline-block; }
+  #app-view .top-actions { gap: 6px; }
+  #app-view .top-actions button { padding: 7px 9px; font-size: 13px; }
+}
+
+/* The administrative route owns its theme, including its dialogs. */
+.admin-dark {
+  color-scheme: dark;
+  --ink: #e6f1ef;
+  --muted: #aec3c4;
+  --line: #365359;
+  --card: #192e34;
+  --surface: #233e45;
+  --teal: #87dfca;
+  --deep: #235a60;
+  --mint-soft: #23463e;
+  --danger: #ffaaa1;
+}
+.admin-dark body { background: #101e23; }
+.admin-dark .ambient { display: none; }
+.admin-dark :is(.topbar,.auth-card,.panel,.monitor-health,dialog) { background: var(--card); }
+.admin-dark :is(input,select,textarea,.ghost,.row-actions button,.icon-btn) {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
+}
+.admin-dark :is(.case-extra-filters,.detail-meta span,.list-pagination,.bm-panel,.bm-savebar) { background: var(--surface); }
+.admin-dark :is(.badge,.form-note) { color: var(--teal); }
+.admin-dark .badge.paused { background: var(--surface); color: var(--muted); }
+.admin-dark :is(.badge.error,.row-deadline.urgent,.deadline-alert.urgent) { background: #502a30; color: var(--danger); }
+.admin-dark :is(.badge.case-selection,.row-deadline,.deadline-alert) { background: #4a3c22; color: #ffe09a; }
+.admin-dark .brand-logo { background: #f2f8f6; border-radius: 9px; padding: 4px 8px; }
+.admin-dark :is(button,input,select,textarea,summary):focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.admin-dark :is(.bono-management,.bono-platform,.br-kpis article,.br-section,.br-intake-report,.br-intake-metrics article,.br-intake-block,.br-chart-card,.br-disclosure,.br-analytics-cards>button) {
+  background: var(--card);
+  color: var(--ink);
+}
+.admin-dark :is(.bm-notice,.bm-flow span,.bm-item,.bm-empty,.bm-prequal-result,.bm-deadline-result,.bm-provenance th,.bm-reference-data,.bm-fieldset:disabled :is(input,select,textarea),
+  .bp-metrics article,.bp-create summary,.bp-organizations,.bp-organization:hover,.bp-org-icon,.bp-activation,.bp-member-form,.bp-field input:read-only,
+  .bi-head,.bi-footer,.bi-kpis article,.bi-notice,.bi-table-wrap th,
+  .br-filters,.br-table thead th,.br-tag,.br-bar,.br-education,.br-shared,.br-view-tabs,.br-disclosure>summary,.br-filter-panel,.br-analytics-cards>button:hover,.br-analytics-cards>button[aria-pressed=true]) {
+  background: var(--surface);
+  color: var(--ink);
+}
+.admin-dark :is(.bi-dialog input:not([type=checkbox]),.bi-dialog select,.br-filters input,.br-filters select,.br-breakdown-tools select,.bp-field input,.bp-field select) { background: var(--surface); }
+.admin-dark :is(.bp-status,.bp-organization.selected) { background: var(--mint-soft); color: var(--teal); }
+.admin-dark :is(.badge.case-selection,.row-deadline,.deadline-alert,.br-tag.warning,.br-notice.warning,.bp-status.pending,.bi-table-wrap .bi-review) { background: #4a3c22; color: #ffe09a; }
+.admin-dark :is(.badge.error,.row-deadline.urgent,.deadline-alert.urgent,.br-tag.danger,.bp-status.failed,.bp-status.review_required,.bp-suspend-confirm,.bi-notice.error) { background: #502a30; color: var(--danger); }
+.admin-dark .bm-flow span.current { background: var(--teal); color: #101e23; }
+.admin-dark :is(.primary,.admin-navigation .selected,.list-pagination button[aria-current="page"]) { color: #fff; }

@@ -15,7 +15,7 @@
   function mount({container,client,getContext,onSaved=async()=>{},toast=()=>{}}) {
     if(typeof container==='string')container=document.querySelector(container);
     if(!container)throw new Error('Falta el contenedor de gestión');
-    let watch=null,draft=null,uploaded=[],active='workflow',dirty=false,saving=false,intakeEnabled=false;
+    let watch=null,draft=null,uploaded=[],active='formalization',dirty=false,saving=false,intakeEnabled=false;
     const context=()=>getContext?.()||{};
     const role=()=>context().membership?.role||context().currentMembership?.role||context().role;
     const editable=()=>['owner','admin','agent'].includes(role());
@@ -146,7 +146,7 @@
     }
     return {
       open(nextWatch,profile={},documents=[]) {
-        watch=nextWatch;uploaded=documents.filter(item=>item.watch_id===watch.id);active='workflow';dirty=false;
+        watch=nextWatch;uploaded=documents.filter(item=>item.watch_id===watch.id);active='formalization';dirty=false;
         intakeEnabled=Object.prototype.hasOwnProperty.call(profile||{},'intake_data')||context().intakeAvailable===true;
         const defaults=domain()?.profileDefaults?.(watch)||{};
         draft={modality:'own_lot',workflow_stage:'prequalification',financial_entity:'',deadline_days:90,checklist:[],prequalification:{},construction:{},costs:[],stage_history:[],...clone(defaults),...clone(profile||{})};
