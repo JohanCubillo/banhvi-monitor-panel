@@ -75,7 +75,7 @@
 .admin-dark .badge.paused { background: var(--surface); color: var(--muted); }
 .admin-dark :is(.badge.error,.row-deadline.urgent,.deadline-alert.urgent) { background: #502a30; color: var(--danger); }
 .admin-dark :is(.badge.case-selection,.row-deadline,.deadline-alert) { background: #4a3c22; color: #ffe09a; }
-.admin-dark .brand-logo { background: #f2f8f6; border-radius: 9px; padding: 4px 8px; }
+.admin-dark .brand-logo { filter: brightness(2.4); }
 .admin-dark :is(button,input,select,textarea,summary):focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
 .admin-dark :is(.bono-management,.bono-platform,.br-kpis article,.br-section,.br-intake-report,.br-intake-metrics article,.br-intake-block,.br-chart-card,.br-disclosure,.br-analytics-cards>button) {
   background: var(--card);
@@ -116,8 +116,6 @@
 .admin-workspace {
   display: grid;
   grid-template-columns: 232px minmax(0,1fr);
-  max-width: 1680px;
-  margin-inline: auto;
 }
 .admin-sidebar {
   position: sticky;
@@ -179,3 +177,10 @@
   #app-view .organization-picker { width: 100%; }
   #app-view .organization-picker select { max-width: none; }
 }
+
+.consultation-health { margin-bottom: 20px; }
+.consultation-health h3 { margin: 0; font-size: 15px; color: var(--ink); }
+.consultation-health p { margin: 4px 0 0; }
+.consultation-health details { margin-top: 8px; }
+.consultation-health summary { width: fit-content; cursor: pointer; font-weight: 700; color: var(--teal); }
+.consultation-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }

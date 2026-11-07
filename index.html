@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="operations-reports.css?v=20261104-reports1">
   <link rel="stylesheet" href="workbook-import.css?v=20261031">
   <link rel="stylesheet" href="platform-admin.css?v=20261029">
-  <link rel="stylesheet" href="admin-layout.css?v=20261107-2">
+  <link rel="stylesheet" href="admin-layout.css?v=20261107-3">
 </head>
 <body>
   <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
@@ -119,14 +119,20 @@
         </aside>
         <div id="case-feature-message" class="form-note hidden" role="status"></div>
         <div id="admin-summary">
-        <p id="monitor-health" class="monitor-health" role="status"></p>
-        <section class="monitor-health" aria-label="Seguimiento de consultas BANHVI">
-          <p id="monitor-freshness"></p>
-          <div class="welcome-actions">
-            <button type="button" class="ghost" data-monitor-filter="__unattempted">Sin primer intento</button>
-            <button type="button" class="ghost" data-monitor-filter="__pending_success">Sin consulta exitosa</button>
-            <button type="button" class="ghost" data-monitor-filter="__queued">En cola</button>
-          </div>
+        <section class="monitor-health consultation-health" aria-labelledby="consultation-health-title">
+          <h3 id="consultation-health-title">Consultas a BANHVI</h3>
+          <p id="monitor-health" role="status"></p>
+          <details>
+            <summary>Ver detalle de las consultas</summary>
+            <p id="monitor-freshness"></p>
+            <div class="consultation-filters">
+              <button type="button" class="ghost hidden" data-monitor-filter="__unattempted">Por consultar</button>
+              <button type="button" class="ghost hidden" data-monitor-filter="__pending_success">Sin resultado guardado</button>
+              <button type="button" class="ghost hidden" data-monitor-filter="__queued">Solicitudes en espera</button>
+              <button type="button" class="ghost hidden" data-monitor-filter="__technical">Consultas con fallo técnico</button>
+              <button type="button" class="ghost hidden" data-monitor-filter="__case_review">Casos por confirmar</button>
+            </div>
+          </details>
         </section>
         <div class="welcome"><div><p class="eyebrow">RESUMEN GENERAL</p><h2 id="user-greeting">Buenos días</h2><p>Revisiones programadas cada 30 minutos, de 7:17 a. m. a 7:17 p. m. Las ejecuciones pueden retrasarse.</p></div><div class="welcome-actions"><button id="import-btn" class="ghost">Importar Excel / CSV</button><button id="export-btn" class="ghost">Exportar a Excel</button><button id="open-add" class="primary compact">+ Nuevo expediente</button><input id="import-file" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden></div></div>
 
@@ -252,6 +258,6 @@
   <script src="report-analytics.js?v=20261104-1"></script>
   <script src="operations-reports.js?v=20261104-reports1"></script>
   <script src="platform-admin.js?v=20261029-2"></script>
-  <script src="app.js?v=20261107-7"></script>
+  <script src="app.js?v=20261107-8"></script>
 </body>
 </html>

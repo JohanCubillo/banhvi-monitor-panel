@@ -96,21 +96,30 @@ function queuedCheckHtml(w){
   return request?`<small data-request-time>Consulta solicitada: ${escapeHtml(formatDate(request.requested_at))} · pendiente de ejecución</small>`:'';
 }
 const monitorFilters={
-  __unattempted:{label:'Sin primer intento',matches:w=>w.enabled&&!w.last_attempt_at&&!w.last_success_at&&!w.last_error},
-  __technical:{label:'Fallos técnicos',matches:w=>w.enabled&&w.last_error&&!['CASE_NOT_FOUND','CASE_SELECTION_REQUIRED','CASE_IDENTITY_CHANGED'].includes(w.last_error)},
-  __case_review:{label:'Casos por revisar',matches:w=>w.enabled&&['CASE_SELECTION_REQUIRED','CASE_IDENTITY_CHANGED'].includes(w.last_error)},
-  __pending_success:{label:'Sin consulta exitosa',matches:w=>w.enabled&&!w.last_success_at&&!w.last_states?.length},
-  __queued:{label:'En cola',matches:w=>w.enabled&&checkRequests.some(r=>r.watch_id===w.id&&r.status==='pending')}
+  __unattempted:{label:'Por consultar',matches:w=>w.enabled&&!w.last_attempt_at&&!w.last_success_at&&!w.last_error},
+  __technical:{label:'Consultas con fallo técnico',matches:w=>w.enabled&&w.last_error&&!['CASE_NOT_FOUND','CASE_SELECTION_REQUIRED','CASE_IDENTITY_CHANGED'].includes(w.last_error)},
+  __case_review:{label:'Casos por confirmar',matches:w=>w.enabled&&['CASE_SELECTION_REQUIRED','CASE_IDENTITY_CHANGED'].includes(w.last_error)},
+  __pending_success:{label:'Sin resultado guardado',matches:w=>w.enabled&&!w.last_success_at&&!w.last_states?.length},
+  __queued:{label:'Solicitudes en espera',matches:w=>w.enabled&&checkRequests.some(r=>r.watch_id===w.id&&r.status==='pending')}
 };
 function renderMonitorHealth(){
   const el=$('#monitor-health');if(!el)return;
-  const successful=watches.filter(w=>w.last_success_at),latest=successful.map(w=>Date.parse(w.last_success_at)).filter(Number.isFinite).sort((a,b)=>b-a)[0];
-  el.textContent=`BANHVI: ${successful.length} de ${watches.length} expedientes con alguna consulta exitosa guardada. ${watches.filter(w=>w.last_error&&!needsCaseReview(w)).length} con error en su último intento. ${watches.filter(needsCaseReview).length} con casos por revisar o elegir. ${checkRequests.filter(r=>r.status==='pending').length} solicitudes en cola. ${latest?`Consulta exitosa más reciente: ${formatDate(latest)}.`:'Todavía no hay consultas exitosas guardadas.'} Actualizar el panel no inicia consultas a BANHVI.`;
+  const successful=watches.filter(w=>w.last_success_at||w.last_states?.length);
+  const latest=Math.max(...successful.map(w=>Date.parse(w.last_success_at)).filter(Number.isFinite));
   const oldest=Math.min(...watches.filter(w=>w.enabled).map(w=>Date.parse(w.last_attempt_at)).filter(Number.isFinite));
-  $('#monitor-freshness').textContent=Number.isFinite(oldest)?`Intento más antiguo entre los expedientes activos con intentos registrados: ${formatDate(oldest)}.`:'Todavía no hay intentos registrados para los expedientes activos.';
+  el.textContent=watches.length
+    ? `${successful.length} de ${watches.length} expedientes tienen un resultado guardado.${Number.isFinite(latest)?' Última consulta exitosa: '+formatDate(latest):''}`
+    : 'Cuando agregués expedientes, acá verás el avance de las consultas.';
+  $('#monitor-freshness').textContent=[
+    'Un expediente puede estar sin resultado porque espera su primera consulta o porque BANHVI todavía no devolvió información.',
+    'El botón Actualizar carga los resultados guardados.',
+    Number.isFinite(oldest)?'Intento registrado más antiguo entre los expedientes activos: '+formatDate(oldest):''
+  ].filter(Boolean).join(' ');
   document.querySelectorAll('[data-monitor-filter]').forEach(button=>{
     const filter=monitorFilters[button.dataset.monitorFilter];
-    button.textContent=`${filter.label} · ${watches.filter(filter.matches).length}`;
+    const count=watches.filter(filter.matches).length;
+    button.textContent=`${filter.label} (${count})`;
+    button.classList.toggle('hidden',count===0);
   });
 }
 function toast(text){ const el=$('#toast'); el.textContent=text; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2600); }
