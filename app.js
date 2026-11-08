@@ -397,6 +397,7 @@ function renderSummaryCharts(today, eventsByDay, alertsByDay){
   coverage.value=consulted;
 }
 
+const RECENT_ACTIVITY_DAYS=7;
 function renderActivity(){
   const now=new Date(),today=BonoCase.todayISO(now);
   const dayOf=value=>Number.isFinite(Date.parse(value))?BonoCase.todayISO(value):'';
@@ -413,9 +414,13 @@ function renderActivity(){
   $('#metric-changes').textContent=dailyEvents.length;
   $('#metric-sent-today').textContent=alertsByDay.get(today)||0;
   renderSummaryCharts(today,eventsByDay,alertsByDay);
-  const range=paginationRange(activityPagination,dailyEvents.length),pageEvents=dailyEvents.slice(range.start,range.end);
-  $('#activity-list').innerHTML=dailyEvents.length?pageEvents.map(e=>{const w=watches.find(x=>x.id===e.watch_id);return `<div class="activity"><span class="activity-dot"></span><div><p><strong>${escapeHtml(w?.label||'Expediente')}</strong> registró un cambio de estado.</p><small>${e.status==='sent'?'Correo enviado':e.status==='review_required'?'Requiere revisión':'Notificación pendiente'}</small></div><small>${escapeHtml(formatDate(e.created_at))}</small></div>`}).join(''):'<div class="empty">Todavía no hay cambios registrados hoy.</div>';
-  renderPagination('#activity-pagination',activityPagination,dailyEvents.length,renderActivity,{label:'actividad de hoy'});
+  // Últimos 7 días (incluye hoy). Los de hoy se resaltan y dicen "Hoy" en lugar de la fecha.
+  const sinceDay=BonoCase.todayISO(new Date(now.getTime()-(RECENT_ACTIVITY_DAYS-1)*86400000));
+  const recentEvents=events.filter(event=>{const day=dayOf(event.created_at);return day&&day>=sinceDay;});
+  const range=paginationRange(activityPagination,recentEvents.length),pageEvents=recentEvents.slice(range.start,range.end);
+  const timeOf=value=>new Intl.DateTimeFormat('es-CR',{timeStyle:'short',timeZone:'America/Costa_Rica'}).format(new Date(value));
+  $('#activity-list').innerHTML=recentEvents.length?pageEvents.map(e=>{const w=watches.find(x=>x.id===e.watch_id),today=isToday(e.created_at);return `<div class="activity${today?' is-today':''}"><span class="activity-dot"></span><div><p><strong>${escapeHtml(w?.label||'Expediente')}</strong> registró un cambio de estado.</p><small>${e.status==='sent'?'Correo enviado':e.status==='review_required'?'Requiere revisión':'Notificación pendiente'}</small></div>${today?`<small class="activity-when"><span class="activity-today">Hoy</span> · ${escapeHtml(timeOf(e.created_at))}</small>`:`<small class="activity-when">${escapeHtml(formatDate(e.created_at))}</small>`}</div>`}).join(''):`<div class="empty">No hay cambios registrados en los últimos ${RECENT_ACTIVITY_DAYS} días.</div>`;
+  renderPagination('#activity-pagination',activityPagination,recentEvents.length,renderActivity,{label:'cambios recientes'});
 }
 
 function stateDifference(before=[], after=[]) {

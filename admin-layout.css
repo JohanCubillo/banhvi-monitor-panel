@@ -256,3 +256,4 @@
   #app-view .top-actions .header-action { min-width: 34px; padding-inline: 6px; }
   .daily-chart { padding-inline: 14px; }
 }
+.activity.is-today{background:var(--mint-soft);border-left:4px solid #16a06a;border-radius:10px;padding-left:12px;padding-right:12px;margin:4px -12px}.activity.is-today .activity-dot{background:#16a06a}.activity-when{white-space:nowrap}.activity-today{font-weight:800;color:#0f7a4f;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}.admin-dark .activity.is-today{background:rgba(22,160,106,.14)}.admin-dark .activity-today{color:#7fe0b4}
