@@ -397,6 +397,23 @@ function renderSummaryCharts(today, eventsByDay, alertsByDay){
   coverage.value=consulted;
 }
 
+// Salir: primero intenta cerrar la sesión en el servidor. Si el servidor la rechaza
+// (403/401: sesión ya revocada o vencida), la cierra igual en este navegador para
+// que el usuario nunca quede atrapado adentro.
+async function signOutPanel(){
+  const button=$('#logout-btn');button.disabled=true;
+  try{
+    const {error}=await client.auth.signOut();
+    if(error)await client.auth.signOut({scope:'local'});
+  }catch{
+    try{await client.auth.signOut({scope:'local'});}catch{}
+  }finally{button.disabled=false;}
+  const {data}=await client.auth.getSession();
+  if(data?.session){
+    Object.keys(localStorage).filter(key=>key.startsWith('sb-')).forEach(key=>localStorage.removeItem(key));
+    location.reload();
+  }
+}
 const RECENT_ACTIVITY_DAYS=7;
 function renderActivity(){
   const now=new Date(),today=BonoCase.todayISO(now);
@@ -649,7 +666,7 @@ async function showSession(session){
   if(!activationHandled&&activationMode&&activationVerificationAccepted){activationHandled=true;openPasswordDialog(session,'activation');}
 }
 
-$('#login-form').addEventListener('submit',signIn);$('#reset-password-btn').onclick=requestPasswordReset;$('#magic-link-btn').onclick=()=>requestMagicLink(false);$('#activate-access-btn').onclick=()=>requestMagicLink(true);$('#organization-picker').onchange=event=>selectOrganization(event.target.value);$('#password-form').addEventListener('submit',saveNewPassword); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=()=>currentAdminView==='platform'?loadPlatform():loadData(); $('#logout-btn').onclick=()=>client.auth.signOut(); $('#search').addEventListener('input',e=>renderWatches(e.target.value));
+$('#login-form').addEventListener('submit',signIn);$('#reset-password-btn').onclick=requestPasswordReset;$('#magic-link-btn').onclick=()=>requestMagicLink(false);$('#activate-access-btn').onclick=()=>requestMagicLink(true);$('#organization-picker').onchange=event=>selectOrganization(event.target.value);$('#password-form').addEventListener('submit',saveNewPassword); $('#add-form').addEventListener('submit',addWatch); $('#open-add').onclick=()=>$('#add-dialog').showModal(); $('#close-add').onclick=$('#cancel-add').onclick=()=>$('#add-dialog').close(); $('#close-detail').onclick=()=>$('#detail-dialog').close(); $('#refresh-btn').onclick=()=>currentAdminView==='platform'?loadPlatform():loadData(); $('#logout-btn').onclick=signOutPanel; $('#search').addEventListener('input',e=>renderWatches(e.target.value));
 $('#accept-consultation-refresh').onclick=()=>loadData();
 $('#defer-consultation-refresh').onclick=()=>{
   dismissedConsultations=pendingConsultations;
