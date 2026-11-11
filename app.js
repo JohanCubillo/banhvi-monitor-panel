@@ -436,8 +436,16 @@ function renderActivity(){
   const recentEvents=events.filter(event=>{const day=dayOf(event.created_at);return day&&day>=sinceDay;});
   const range=paginationRange(activityPagination,recentEvents.length),pageEvents=recentEvents.slice(range.start,range.end);
   const timeOf=value=>new Intl.DateTimeFormat('es-CR',{timeStyle:'short',timeZone:'America/Costa_Rica'}).format(new Date(value));
-  $('#activity-list').innerHTML=recentEvents.length?pageEvents.map(e=>{const w=watches.find(x=>x.id===e.watch_id),today=isToday(e.created_at);return `<div class="activity${today?' is-today':''}"><span class="activity-dot"></span><div><p><strong>${escapeHtml(w?.label||'Expediente')}</strong> registró un cambio de estado.</p><small>${e.status==='sent'?'Correo enviado':e.status==='review_required'?'Requiere revisión':'Notificación pendiente'}</small></div>${today?`<small class="activity-when"><span class="activity-today">Hoy</span> · ${escapeHtml(timeOf(e.created_at))}</small>`:`<small class="activity-when">${escapeHtml(formatDate(e.created_at))}</small>`}</div>`}).join(''):`<div class="empty">No hay cambios registrados en los últimos ${RECENT_ACTIVITY_DAYS} días.</div>`;
+  $('#activity-list').innerHTML=recentEvents.length?pageEvents.map(e=>{const w=watches.find(x=>x.id===e.watch_id),today=isToday(e.created_at);return `<div class="activity${today?' is-today':''}"><span class="activity-dot"></span><div class="activity-body"><p><strong>${escapeHtml(w?.label||'Expediente')}</strong> cambió de estado${w?.case_number?` <span class="activity-case">· Caso ${escapeHtml(w.case_number)}</span>`:''}</p>${activityTransition(e)}<small>${e.status==='sent'?'Correo enviado':e.status==='review_required'?'Requiere revisión':'Notificación pendiente'}</small></div>${today?`<small class="activity-when"><span class="activity-today">Hoy</span> · ${escapeHtml(timeOf(e.created_at))}</small>`:`<small class="activity-when">${escapeHtml(formatDate(e.created_at))}</small>`}</div>`}).join(''):`<div class="empty">No hay cambios registrados en los últimos ${RECENT_ACTIVITY_DAYS} días.</div>`;
   renderPagination('#activity-pagination',activityPagination,recentEvents.length,renderActivity,{label:'cambios recientes'});
+}
+
+// Muestra "estado anterior → estado actual" de un cambio detectado por el monitor.
+function activityTransition(event){
+  const hadState=Array.isArray(event.before_states)&&event.before_states.length;
+  const before=hadState?latestState(event.before_states):'Sin estado previo';
+  const after=latestState(event.after_states);
+  return `<div class="activity-transition"><span class="state-chip is-before${hadState?'':' is-none'}" title="Estado anterior">${escapeHtml(before)}</span><span class="activity-arrow" aria-label="cambió a">→</span><span class="state-chip is-after" title="Estado actual">${escapeHtml(after)}</span></div>`;
 }
 
 function stateDifference(before=[], after=[]) {

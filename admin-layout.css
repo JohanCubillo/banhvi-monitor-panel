@@ -257,3 +257,15 @@
   .daily-chart { padding-inline: 14px; }
 }
 .activity.is-today{background:var(--mint-soft);border-left:4px solid #16a06a;border-radius:10px;padding-left:12px;padding-right:12px;margin:4px -12px}.activity.is-today .activity-dot{background:#16a06a}.activity-when{white-space:nowrap}.activity-today{font-weight:800;color:#0f7a4f;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}.admin-dark .activity.is-today{background:rgba(22,160,106,.14)}.admin-dark .activity-today{color:#7fe0b4}
+
+/* Cambios recientes: estado anterior → estado actual */
+.activity-body{min-width:0;flex:1}
+.activity-case{font-weight:500;color:var(--muted);font-size:.92em}
+.activity-transition{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:6px 0 4px}
+.state-chip{display:inline-block;max-width:100%;padding:3px 10px;border-radius:999px;font-size:.82rem;font-weight:600;line-height:1.35;overflow-wrap:anywhere}
+.state-chip.is-before{background:#eef1ee;color:#5d6f72;text-decoration:line-through;text-decoration-color:rgba(93,111,114,.45)}
+.state-chip.is-after{background:#d9f2e6;color:#0b5a3c;border:1px solid #9fd8bd}
+.state-chip.is-before.is-none{text-decoration:none;font-style:italic;font-weight:500}
+.activity-arrow{color:var(--muted);font-weight:700}
+.admin-dark .state-chip.is-before{background:#24353a;color:#a9babd}
+.admin-dark .state-chip.is-after{background:#123d2e;color:#9fe3c2;border-color:#1f6b4c}
