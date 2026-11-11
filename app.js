@@ -270,6 +270,7 @@ function render() {
   $('#metric-errors').textContent=watches.filter(w=>trafficStatus(w)==='red').length;
   renderWatches($('#search').value);
   renderActivity();
+  renderFollowupSummary();
   renderCompliance();
   operationsReports.render();
 }
@@ -415,6 +416,24 @@ async function signOutPanel(){
   }
 }
 const RECENT_ACTIVITY_DAYS=7;
+// Seguimiento de formalización en el Resumen: siempre a la vista, las más atrasadas primero.
+const FOLLOWUP_SUMMARY_LIMIT=8;
+function renderFollowupSummary(){
+  const list=$('#followup-list');if(!list)return;
+  const rows=watches.map(watch=>({watch,info:formalizationInfo(watch)}))
+    .filter(({info})=>info&&!info.completed&&info.days<=30)
+    .sort((a,b)=>a.info.days-b.info.days);
+  const overdue=rows.filter(r=>r.info.days<0).length,soon=rows.length-overdue;
+  $('#followup-counts').innerHTML=rows.length?`${overdue?`<span class="followup-count is-overdue">${overdue} vencida${overdue===1?'':'s'}</span>`:''}${soon?`<span class="followup-count is-soon">${soon} por vencer</span>`:''}`:'';
+  const day=iso=>new Intl.DateTimeFormat('es-CR',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(iso+'T12:00:00Z'));
+  const badge=days=>days<0?`<span class="followup-badge is-overdue">${Math.abs(days)} días vencida</span>`:days===0?'<span class="followup-badge is-overdue">Vence hoy</span>':`<span class="followup-badge ${days<=10?'is-urgent':'is-soon'}">${days} días</span>`;
+  list.innerHTML=rows.length?rows.slice(0,FOLLOWUP_SUMMARY_LIMIT).map(({watch,info})=>`<div class="followup-row"><div class="followup-name"><strong>${escapeHtml(watch.label||'Sin nombre')}</strong><small>${watch.case_number?`Caso ${escapeHtml(watch.case_number)} · `:''}Emitido ${escapeHtml(day(info.emittedDate))} · Meta ${escapeHtml(day(info.deadline))}</small></div>${badge(info.days)}<button type="button" class="ghost followup-open" data-followup-open="${escapeHtml(watch.id)}">Abrir expediente</button></div>`).join(''):'<div class="empty">No hay metas de formalización vencidas ni por vencer en los próximos 30 días.</div>';
+  const hidden=rows.length-Math.min(rows.length,FOLLOWUP_SUMMARY_LIMIT);
+  $('#followup-more').textContent=hidden?`y ${hidden} más en Reportes y alertas`:'';
+  list.querySelectorAll('[data-followup-open]').forEach(button=>button.onclick=()=>openDetail(button.dataset.followupOpen));
+  $('#followup-open-reports').onclick=()=>openAdminView('reports');
+}
+
 function renderActivity(){
   const now=new Date(),today=BonoCase.todayISO(now);
   const dayOf=value=>Number.isFinite(Date.parse(value))?BonoCase.todayISO(value):'';
@@ -624,7 +643,7 @@ async function openAdminView(view){
   $('#platform-admin').classList.toggle('hidden',view!=='platform');
   $('#platform-monitor').classList.toggle('hidden',view!=='platform'||!isPlatformAdmin);
   document.querySelectorAll('[data-admin-view]').forEach(button=>{const selected=button.dataset.adminView===view;button.classList.toggle('selected',selected);if(selected)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
-  if(view==='platform')await loadPlatform();else if(view==='reports')operationsReports.render();else if(view==='summary')renderActivity();
+  if(view==='platform')await loadPlatform();else if(view==='reports')operationsReports.render();else if(view==='summary'){renderActivity();renderFollowupSummary();}
   window.scrollTo(0,0);
 }
 function clearCompanyData(){

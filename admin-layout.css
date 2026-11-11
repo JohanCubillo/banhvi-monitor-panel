@@ -269,3 +269,23 @@
 .activity-arrow{color:var(--muted);font-weight:700}
 .admin-dark .state-chip.is-before{background:#24353a;color:#a9babd}
 .admin-dark .state-chip.is-after{background:#123d2e;color:#9fe3c2;border-color:#1f6b4c}
+
+/* Resumen: seguimiento de formalización siempre a la vista */
+.followup-summary{margin:0 0 18px;border-left:4px solid #c9893a}.followup-summary .empty{padding:14px 0}
+.followup-summary .panel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.followup-counts{display:flex;gap:8px;flex-wrap:wrap}
+.followup-count{padding:5px 11px;border-radius:999px;font-size:.82rem;font-weight:700}
+.followup-count.is-overdue{background:#fde3e3;color:#a52a2a}
+.followup-count.is-soon{background:#fff3ce;color:#735500}
+.followup-list{display:flex;flex-direction:column;padding:2px 24px 0}
+.followup-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line,#e6ebe8)}.followup-row:first-child{border-top:0}
+.followup-name{min-width:0}.followup-name strong{display:block;overflow-wrap:anywhere}.followup-name small{color:var(--muted);font-size:.8rem}
+.followup-badge{padding:4px 10px;border-radius:999px;font-size:.78rem;font-weight:700;white-space:nowrap}
+.followup-badge.is-overdue{background:#fde3e3;color:#a52a2a}
+.followup-badge.is-urgent{background:#ffe7c7;color:#8a4b00}
+.followup-badge.is-soon{background:#fff3ce;color:#735500}
+.followup-open{white-space:nowrap}
+.followup-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 24px 18px;border-top:1px solid var(--line,#e6ebe8);color:var(--muted);font-size:.85rem}
+@media (max-width:640px){.followup-row{grid-template-columns:1fr auto}.followup-open{grid-column:1/-1;justify-self:start}}
+.admin-dark .followup-count.is-overdue,.admin-dark .followup-badge.is-overdue{background:#502a30;color:#ffb3b3}
+.admin-dark .followup-count.is-soon,.admin-dark .followup-badge.is-soon,.admin-dark .followup-badge.is-urgent{background:#4a3c22;color:#ffe09a}

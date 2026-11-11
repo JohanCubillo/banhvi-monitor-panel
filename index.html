@@ -6,6 +6,10 @@
   <meta name="theme-color" content="#0b3b47">
   <script src="auth-support.js?v=20261029-3"></script>
   <title>BonoAlerta | Seguimiento de expedientes de bono de vivienda</title>
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/favicon-512.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
@@ -15,7 +19,7 @@
   <link rel="stylesheet" href="operations-reports.css?v=20261107-filters1">
   <link rel="stylesheet" href="workbook-import.css?v=20261031">
   <link rel="stylesheet" href="platform-admin.css?v=20261029">
-  <link rel="stylesheet" href="admin-layout.css?v=20261111-transition1">
+  <link rel="stylesheet" href="admin-layout.css?v=20261111-followup1">
 </head>
 <body>
   <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
@@ -133,6 +137,11 @@
         <div id="case-feature-message" class="form-note hidden" role="status"></div>
         <section id="admin-summary" class="hidden" aria-labelledby="daily-summary-title">
           <div class="welcome"><div><p class="eyebrow" id="summary-date"></p><h2 id="daily-summary-title">Resumen del día</h2><p id="user-greeting">Buenos días</p></div></div>
+          <section class="panel followup-summary" aria-labelledby="followup-summary-title">
+            <div class="panel-head"><div><h3 id="followup-summary-title">Seguimiento de formalización</h3><p>Metas internas vencidas o con 30 días o menos. Las más atrasadas aparecen primero.</p></div><div id="followup-counts" class="followup-counts"></div></div>
+            <div id="followup-list" class="followup-list"></div>
+            <div class="followup-foot"><span id="followup-more"></span><button type="button" class="ghost" id="followup-open-reports">Ver seguimiento completo</button></div>
+          </section>
           <div class="metrics daily-metrics">
             <article><span>Expedientes consultados hoy</span><strong id="metric-reviewed-today">0</strong><small>con un resultado de BANHVI</small></article>
             <article><span>Cambios detectados hoy</span><strong id="metric-changes">0</strong><small>registrados por el monitor</small></article>
@@ -291,6 +300,6 @@
   <script src="report-analytics.js?v=20261104-1"></script>
   <script src="operations-reports.js?v=20261111-followup1"></script>
   <script src="platform-admin.js?v=20261029-2"></script>
-  <script src="app.js?v=20261111-transition1"></script>
+  <script src="app.js?v=20261111-followup1"></script>
 </body>
 </html>
