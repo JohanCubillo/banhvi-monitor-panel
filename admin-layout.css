@@ -272,14 +272,13 @@
 
 /* Resumen: seguimiento de formalización (compacto, al final del resumen) */
 .followup-summary{border-left:3px solid #c9893a}
-.followup-summary .panel-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 20px}
-.followup-summary .panel-head h3{font-size:1rem;margin:0}.followup-summary .panel-head p{font-size:.8rem;margin:2px 0 0}
+.followup-summary .panel-head{gap:12px;flex-wrap:wrap}
 .followup-summary .empty{padding:10px 0;font-size:.85rem}
 .followup-counts{display:flex;gap:6px;flex-wrap:wrap}
 .followup-count{padding:3px 9px;border-radius:999px;font-size:.74rem;font-weight:700}
 .followup-count.is-overdue{background:#fde3e3;color:#a52a2a}
 .followup-count.is-soon{background:#fff3ce;color:#735500}
-.followup-list{display:flex;flex-direction:column;padding:0 20px}
+.followup-list{display:flex;flex-direction:column;padding:0 24px}
 .followup-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line,#e6ebe8)}.followup-row:first-child{border-top:0}
 .followup-name{min-width:0}.followup-name strong{display:block;font-size:.86rem;overflow-wrap:anywhere}.followup-name small{color:var(--muted);font-size:.72rem}
 .followup-badge{padding:2px 8px;border-radius:999px;font-size:.7rem;font-weight:700;white-space:nowrap}
@@ -287,7 +286,7 @@
 .followup-badge.is-urgent{background:#ffe7c7;color:#8a4b00}
 .followup-badge.is-soon{background:#fff3ce;color:#735500}
 .followup-open{background:none;border:0;padding:4px 2px;font-size:.8rem;font-weight:700;color:var(--green,#0f6b4f);text-decoration:underline;cursor:pointer;white-space:nowrap}
-.followup-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 20px 12px;border-top:1px solid var(--line,#e6ebe8);color:var(--muted);font-size:.76rem}
+.followup-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 24px 12px;border-top:1px solid var(--line,#e6ebe8);color:var(--muted);font-size:.76rem}
 .followup-foot .ghost{padding:5px 10px;font-size:.78rem;min-height:0}
 .admin-dark .followup-count.is-overdue,.admin-dark .followup-badge.is-overdue{background:#502a30;color:#ffb3b3}
 .admin-dark .followup-count.is-soon,.admin-dark .followup-badge.is-soon,.admin-dark .followup-badge.is-urgent{background:#4a3c22;color:#ffe09a}
