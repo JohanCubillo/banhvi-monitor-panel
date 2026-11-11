@@ -4,7 +4,7 @@
   let settings, host, organizationContext;
   const filterDefaults = () => ({from:'',to:'',entity:'',zone:'',bonoType:'',companyState:'',responsible:'',segment:'',dateBasis:'created'});
   const filters = filterDefaults();
-  let activeView='analytics', breakdown='zone', charts=[], tableCursor=0, renderingTables=false,filtersExpanded=null;
+  let activeView='followup', breakdown='zone', charts=[], tableCursor=0, renderingTables=false,filtersExpanded=null;
   const tableModels=new Map(),tablePages=new Map();
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   const array = value => Array.isArray(value) ? value : [];
@@ -26,7 +26,7 @@
   const monthLabel = key => new Intl.DateTimeFormat('es-CR',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(key+'-01T12:00:00Z'));
   const sourceLabel = intake => array(intake.sources).map(source=>`${text(source.sheet)||'Hoja'} · fila ${text(source.row)||'sin número'}`).join('; ');
   function resetContext(data) {
-    if(organizationContext!==data.organizationId){Object.assign(filters,filterDefaults());organizationContext=data.organizationId;activeView='analytics';breakdown='zone';filtersExpanded=null;tablePages.clear();}
+    if(organizationContext!==data.organizationId){Object.assign(filters,filterDefaults());organizationContext=data.organizationId;activeView='followup';breakdown='zone';filtersExpanded=null;tablePages.clear();}
   }
   const scopedWatches = data => array(data.watches).filter(w=>!data.organizationId||w.organization_id===data.organizationId);
   function profileMap(profiles) {
@@ -156,7 +156,8 @@
       <details class="br-disclosure"><summary>Carga por responsable · ${data.responsibles.length} grupos</summary><section class="br-section" data-br-responsible-performance><h4>Cartera por responsable</h4>${groupTable(data.responsibles,'responsible')}</section></details>
     </div>`;
   }
-  const viewLabels={analytics:'Resumen ejecutivo',overview:'Gestión interna',intake:'Planilla',followup:'Seguimiento',detail:'Detalle'};
+  // Seguimiento va primero y es la vista inicial: son los plazos y pendientes que deben estar siempre a la vista.
+  const viewLabels={followup:'Seguimiento',analytics:'Resumen ejecutivo',overview:'Gestión interna',intake:'Planilla',detail:'Detalle'};
   const breakdownLabels={entity:'Entidad',zone:'Zona',bonoType:'Tipo de bono',companyState:'Estado de empresa',houseModel:'Modelo de vivienda'};
   const breakdownValue=(row,key)=>key==='entity'?row.entity:text(row.intake[({zone:'zone',bonoType:'bono_type',companyState:'company_status',houseModel:'house_model'})[key]])||'Sin registrar';
   function disclosure(node,title,open=false){
@@ -204,7 +205,7 @@
     function activate(key,redraw=true){activeView=key;report.querySelector('.br-kpis').classList.toggle('br-summary-kpis',key==='analytics');for(const [id,panel] of Object.entries(panels))panel.hidden=id!==key;nav.querySelectorAll('[data-br-view]').forEach(button=>{const selected=button.dataset.brView===key;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;});if(redraw)drawCharts(rows);}
     nav.querySelectorAll('[data-br-view]').forEach(button=>button.onclick=()=>activate(button.dataset.brView));
     nav.addEventListener('keydown',event=>{const buttons=[...nav.querySelectorAll('button')],index=buttons.indexOf(document.activeElement);if(index<0)return;let next;if(event.key==='ArrowRight')next=(index+1)%buttons.length;else if(event.key==='ArrowLeft')next=(index+buttons.length-1)%buttons.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=buttons.length-1;else return;event.preventDefault();buttons[next].click();buttons[next].focus();});
-    activate(Object.hasOwn(panels,activeView)?activeView:'analytics',false);
+    activate(Object.hasOwn(panels,activeView)?activeView:'followup',false);
   }
   function chartCard(area,title,labels,values,type='bar',horizontal=false,description='',segments=[]){
     const figure=document.createElement('figure');figure.className='br-chart-card';
