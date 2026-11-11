@@ -416,15 +416,17 @@ async function signOutPanel(){
   }
 }
 const RECENT_ACTIVITY_DAYS=7;
-// Seguimiento de formalización en el Resumen: siempre a la vista, las más atrasadas primero.
+// Seguimiento de formalización en el Resumen: primero las metas por vencer, después las vencidas.
+const followupRank=days=>days>=0?days:100000-days;
 const FOLLOWUP_SUMMARY_LIMIT=5;
 function renderFollowupSummary(){
   const list=$('#followup-list');if(!list)return;
   const rows=watches.map(watch=>({watch,info:formalizationInfo(watch)}))
     .filter(({info})=>info&&!info.completed&&info.days<=30)
-    .sort((a,b)=>a.info.days-b.info.days);
+    // Primero las que están por vencer (la más próxima arriba); después las ya vencidas (la más reciente arriba).
+    .sort((a,b)=>followupRank(a.info.days)-followupRank(b.info.days));
   const overdue=rows.filter(r=>r.info.days<0).length,soon=rows.length-overdue;
-  $('#followup-counts').innerHTML=rows.length?`${overdue?`<span class="followup-count is-overdue">${overdue} vencida${overdue===1?'':'s'}</span>`:''}${soon?`<span class="followup-count is-soon">${soon} por vencer</span>`:''}`:'';
+  $('#followup-counts').innerHTML=rows.length?`${soon?`<span class="followup-count is-soon">${soon} por vencer</span>`:''}${overdue?`<span class="followup-count is-overdue">${overdue} vencida${overdue===1?'':'s'}</span>`:''}`:'';
   const day=iso=>new Intl.DateTimeFormat('es-CR',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(iso+'T12:00:00Z'));
   const badge=days=>days<0?`<span class="followup-badge is-overdue">${Math.abs(days)} días vencida</span>`:days===0?'<span class="followup-badge is-overdue">Vence hoy</span>':`<span class="followup-badge ${days<=10?'is-urgent':'is-soon'}">${days} días</span>`;
   list.innerHTML=rows.length?rows.slice(0,FOLLOWUP_SUMMARY_LIMIT).map(({watch,info})=>`<div class="followup-row"><div class="followup-name"><strong>${escapeHtml(watch.label||'Sin nombre')}</strong><small>${watch.case_number?`Caso ${escapeHtml(watch.case_number)} · `:''}Emitido ${escapeHtml(day(info.emittedDate))} · Meta ${escapeHtml(day(info.deadline))}</small></div>${badge(info.days)}<button type="button" class="followup-open" data-followup-open="${escapeHtml(watch.id)}">Abrir</button></div>`).join(''):'<div class="empty">No hay metas de formalización vencidas ni por vencer en los próximos 30 días.</div>';
