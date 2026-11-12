@@ -291,3 +291,13 @@
 .admin-dark .followup-count.is-overdue,.admin-dark .followup-badge.is-overdue{background:#502a30;color:#ffb3b3}
 .admin-dark .followup-count.is-soon,.admin-dark .followup-badge.is-soon,.admin-dark .followup-badge.is-urgent{background:#4a3c22;color:#ffe09a}
 .admin-dark .followup-open{color:#8fe0bd}
+
+/* Superadmin: control del monitor */
+.monitor-controls{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 24px;border-bottom:1px solid var(--line,#e6ebe8)}
+.monitor-schedule{margin:0;color:var(--muted);font-size:.88rem;line-height:1.6}
+.monitor-control-note{margin:4px 0 0;font-size:.82rem;color:var(--muted)}.monitor-control-note:empty{display:none}
+.monitor-state{display:inline-block;margin-right:6px;padding:2px 10px;border-radius:999px;font-size:.78rem;font-weight:700}
+.monitor-state.is-on{background:#d9f2e6;color:#0b5a3c}
+.monitor-state.is-off{background:#fde3e3;color:#a52a2a}
+.monitor-controls .welcome-actions{margin:0}
+.admin-dark .monitor-state.is-on{background:#123d2e;color:#9fe3c2}.admin-dark .monitor-state.is-off{background:#502a30;color:#ffb3b3}

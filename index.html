@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="operations-reports.css?v=20261107-filters1">
   <link rel="stylesheet" href="workbook-import.css?v=20261031">
   <link rel="stylesheet" href="platform-admin.css?v=20261029">
-  <link rel="stylesheet" href="admin-layout.css?v=20261111-followup3">
+  <link rel="stylesheet" href="admin-layout.css?v=20261112-monitor1">
 </head>
 <body>
   <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
@@ -207,6 +207,10 @@
         </div>
         <section id="platform-monitor" class="panel hidden" aria-label="Estado del monitor">
           <div class="panel-head"><div><h3>Estado del monitor</h3><p id="platform-monitor-run" role="status"></p></div></div>
+          <div class="monitor-controls" id="platform-monitor-controls">
+            <div><p class="monitor-schedule" id="platform-monitor-schedule">Cargando horario automático…</p><p class="monitor-control-note" id="platform-monitor-note" role="status"></p></div>
+            <div class="welcome-actions"><button type="button" class="primary" id="platform-monitor-run-now" hidden>Revisar ahora</button><button type="button" class="ghost" id="platform-monitor-toggle" hidden>Pausar revisiones automáticas</button></div>
+          </div>
           <div class="monitor-health" id="platform-monitor-companies"></div>
         </section>
         <section id="platform-admin" class="hidden" aria-label="Empresas y accesos"></section>
@@ -300,6 +304,6 @@
   <script src="report-analytics.js?v=20261104-1"></script>
   <script src="operations-reports.js?v=20261111-followup2"></script>
   <script src="platform-admin.js?v=20261029-2"></script>
-  <script src="app.js?v=20261111-followup3"></script>
+  <script src="app.js?v=20261112-monitor1"></script>
 </body>
 </html>

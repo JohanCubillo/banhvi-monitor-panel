@@ -633,8 +633,71 @@ async function loadPlatform(){
     group.append(heading,actions);
     companies.append(group);
   }
+  renderMonitorControls();
   if(organizations.error||members.error||invites.error){toast('No se pudieron actualizar las empresas y accesos');return;}
   platformManager.render(organizations.data,members.data,invites.data);
+}
+
+// Control del monitor desde el superadmin (sql/platform_monitor_control.sql).
+// Horario automático: lunes a sábado, cada 30 minutos de 07:17 a 19:17 (Costa Rica, UTC-6).
+function nextMonitorSlot(now=new Date()){
+  const crNow=new Date(now.getTime()-6*3600000);
+  for(let day=0;day<8;day++){
+    const base=Date.UTC(crNow.getUTCFullYear(),crNow.getUTCMonth(),crNow.getUTCDate()+day);
+    if(new Date(base).getUTCDay()===0)continue;
+    for(let minute=7*60+17;minute<=19*60+17;minute+=30){
+      const slot=new Date(base+(minute+360)*60000);
+      if(slot>now)return slot;
+    }
+  }
+  return null;
+}
+function monitorSlotLabel(slot){
+  if(!slot)return '';
+  const tz={timeZone:'America/Costa_Rica'};
+  const day=d=>new Intl.DateTimeFormat('en-CA',{...tz,dateStyle:'short'}).format(d);
+  const time=new Intl.DateTimeFormat('es-CR',{...tz,hour:'numeric',minute:'2-digit'}).format(slot);
+  const now=new Date(),tomorrow=new Date(now.getTime()+86400000);
+  const when=day(slot)===day(now)?'hoy':day(slot)===day(tomorrow)?'mañana':new Intl.DateTimeFormat('es-CR',{...tz,weekday:'long'}).format(slot);
+  return `${when} a las ${time}`;
+}
+let monitorPauseArmed=null;
+async function renderMonitorControls(){
+  const label=$('#platform-monitor-schedule'),note=$('#platform-monitor-note'),runNow=$('#platform-monitor-run-now'),toggle=$('#platform-monitor-toggle');
+  if(!label||!isPlatformAdmin)return;
+  const {data,error}=await client.rpc('platform_monitor_schedule');
+  if(!isPlatformAdmin)return;
+  runNow.hidden=toggle.hidden=true;
+  if(error){label.textContent='Para controlar el monitor desde aquí falta instalar sql/platform_monitor_control.sql en Supabase.';return;}
+  if(!data?.jobs){label.textContent='El horario automático no está instalado (sql/monitor_dispatch_cron.sql).';return;}
+  const active=data.active===data.jobs;
+  const last=data.last_dispatch?` · Último disparo automático: ${formatDate(data.last_dispatch)}`:'';
+  label.innerHTML=active
+    ?`<span class="monitor-state is-on">Automático: activo</span> Próxima revisión: ${escapeHtml(monitorSlotLabel(nextMonitorSlot()))}${escapeHtml(last)}`
+    :`<span class="monitor-state is-off">Automático: en pausa</span> No se consulta el BANHVI hasta que lo reanudés${escapeHtml(last)}`;
+  if(!data.token)note.textContent='Falta el token de GitHub en Vault: los disparos no van a funcionar.';
+  runNow.hidden=!data.token;toggle.hidden=false;
+  toggle.textContent=active?'Pausar revisiones automáticas':'Reanudar revisiones automáticas';
+  toggle.className=active?'ghost':'primary';
+  monitorPauseArmed=null;
+  toggle.onclick=async()=>{
+    if(active&&monitorPauseArmed!==toggle){
+      monitorPauseArmed=toggle;toggle.textContent='¿Seguro? Tocá otra vez para pausar';
+      setTimeout(()=>{if(monitorPauseArmed===toggle){monitorPauseArmed=null;toggle.textContent='Pausar revisiones automáticas';}},5000);
+      return;
+    }
+    toggle.disabled=true;
+    const result=await client.rpc('platform_set_monitor_schedule',{p_active:!active});
+    toggle.disabled=false;
+    note.textContent=result.error?`No se pudo cambiar: ${result.error.message}`:active?'Revisiones automáticas en pausa.':'Revisiones automáticas reanudadas.';
+    if(!result.error)renderMonitorControls();
+  };
+  runNow.onclick=async()=>{
+    runNow.disabled=true;note.textContent='Pidiendo la revisión…';
+    const result=await client.rpc('platform_run_monitor_now');
+    runNow.disabled=false;
+    note.textContent=result.error?`No se pudo iniciar: ${result.error.message}`:'Listo: la revisión arranca en unos segundos. El estado de arriba se actualiza cuando termine (unos 15 minutos).';
+  };
 }
 async function openAdminView(view){
   if(view==='platform'&&!isPlatformAdmin)return;
