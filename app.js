@@ -559,7 +559,7 @@ async function sendClientAccess(){
   if(!watch?.client_email||!watch?.case_number||!watch?.client_portal_enabled){message.textContent='Primero guardá el correo, esperá que exista el número de caso y activá el portal.';message.className='message error';return;}
   message.textContent='Preparando invitación…';message.className='message';const {error}=await client.rpc('enqueue_portal_invite',{p_watch_id:currentWatchId});
   if(error){message.textContent='No fue posible programar el correo. Verificá los datos e intentá nuevamente.';message.className='message error';return;}
-  message.textContent='Invitación programada. Se enviará automáticamente en la próxima revisión, normalmente dentro de 30 minutos.';
+  message.textContent='Invitación programada. Se enviará automáticamente en la próxima revisión, normalmente dentro de 2 horas.';
 }
 async function addNote(event){event.preventDefault();const body=$('#note-body').value.trim();if(!body||!currentWatchId)return;const {error}=await client.from('monitor_notes').insert({watch_id:currentWatchId,body,client_visible:$('#note-visible').checked});if(error){toast('No se pudo guardar la nota');return;}event.target.reset();await loadData();renderCaseManagement();toast('Nota agregada');}
 async function addTask(event){event.preventDefault();const title=$('#task-title').value.trim();if(!title||!currentWatchId)return;const {error}=await client.from('monitor_tasks').insert({watch_id:currentWatchId,title,due_at:$('#task-due').value?new Date($('#task-due').value).toISOString():null,assigned_to:$('#detail-assigned').value.trim()||null});if(error){toast('No se pudo crear la tarea');return;}event.target.reset();await loadData();renderCaseManagement();toast('Tarea creada');}
@@ -639,13 +639,13 @@ async function loadPlatform(){
 }
 
 // Control del monitor desde el superadmin (sql/platform_monitor_control.sql).
-// Horario automático: lunes a sábado, cada 30 minutos de 07:17 a 19:17 (Costa Rica, UTC-6).
+// Horario automático: lunes a sábado, cada 2 horas de 07:17 a 19:17 (Costa Rica, UTC-6).
 function nextMonitorSlot(now=new Date()){
   const crNow=new Date(now.getTime()-6*3600000);
   for(let day=0;day<8;day++){
     const base=Date.UTC(crNow.getUTCFullYear(),crNow.getUTCMonth(),crNow.getUTCDate()+day);
     if(new Date(base).getUTCDay()===0)continue;
-    for(let minute=7*60+17;minute<=19*60+17;minute+=30){
+    for(let minute=7*60+17;minute<=19*60+17;minute+=120){
       const slot=new Date(base+(minute+360)*60000);
       if(slot>now)return slot;
     }
