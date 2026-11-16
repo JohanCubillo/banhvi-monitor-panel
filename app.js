@@ -13,6 +13,8 @@ const appView = $('#app-view');
 const landingView = $('#landing-view');
 let watches = [];
 let events = [];
+let operationalEvents = [];
+let operationalLoadError = false;
 let checkRequests = [];
 let caseChoices = [];
 let notes = [];
@@ -210,8 +212,27 @@ async function checkForConsultationResults(){
       const previous=displayed.get(w.id);
       return previous&&(w.last_attempt_at!==previous.last_attempt_at||w.last_success_at!==previous.last_success_at);
     });
-    pendingConsultations=JSON.stringify(changed.map(w=>[w.id,w.last_attempt_at,w.last_success_at]).sort());
-    $('#consultation-refresh').classList.toggle('hidden',!changed.length||pendingConsultations===dismissedConsultations);
+    const ids=watches.map(w=>w.id);
+    const [outbox,operational]=await Promise.all([
+      readWatchRows('monitor_outbox','id,watch_id,status,sent_at',ids),
+      readWatchRows('monitor_operational_alerts','id,watch_id,status,sent_at',ids)
+    ]);
+    if(sequence!==loadSequence||organizationId!==currentOrganization?.id)return;
+    const notificationChanges=(result,previous,kind)=>{
+      if(result.error)return [];
+      const known=new Map(previous.map(event=>[event.id,event]));
+      return (result.data||[]).filter(event=>{
+        const before=known.get(event.id);
+        return !before||event.sent_at!==before.sent_at||event.status!==before.status;
+      }).map(event=>[kind,event.id,event.status,event.sent_at]);
+    };
+    const changes=[
+      ...changed.map(w=>['watch',w.id,w.last_attempt_at,w.last_success_at]),
+      ...notificationChanges(outbox,events,'change'),
+      ...notificationChanges(operational,operationalEvents,'reminder')
+    ];
+    pendingConsultations=JSON.stringify(changes.sort());
+    $('#consultation-refresh').classList.toggle('hidden',!changes.length||pendingConsultations===dismissedConsultations);
   }catch{
     // Keep the panel usable if the check cannot reach the server.
   }finally{
@@ -227,16 +248,18 @@ async function loadData() {
   if(sequence!==loadSequence)return;
   if(watchResult.error){$('#sync-status').textContent='Error de actualización';toast('No fue posible cargar los expedientes de esta empresa');return;}
   const nextWatches=watchResult.data||[],ids=nextWatches.map(w=>w.id);
-  const [eventResult,noteResult,taskResult,documentResult,profileResult,intakeProbe,checkResult,choicesResult]=await Promise.all([
+  const [eventResult,noteResult,taskResult,documentResult,profileResult,intakeProbe,checkResult,choicesResult,operationalResult]=await Promise.all([
     readWatchRows('monitor_outbox','id,watch_id,status,created_at,sent_at,before_states,after_states',ids),
     readWatchRows('monitor_notes','*',ids),readWatchRows('monitor_tasks','*',ids),readWatchRows('monitor_documents','*',ids),
     readRows('monitor_case_profiles','*',q=>q.eq('organization_id',organizationId),'watch_id'),
     client.from('monitor_case_profiles').select('watch_id,intake_data').eq('organization_id',organizationId).limit(1),
     readWatchRows('monitor_check_requests','watch_id,status,requested_at,completed_at,last_error',ids,'requested_at'),
-    readWatchRows('monitor_case_choices','watch_id,case_numbers,selected_case_number,observed_at',ids,'observed_at')
+    readWatchRows('monitor_case_choices','watch_id,case_numbers,selected_case_number,observed_at',ids,'observed_at'),
+    readWatchRows('monitor_operational_alerts','id,watch_id,kind,status,created_at,sent_at,deadline_on,days_remaining',ids)
   ]);
   if(sequence!==loadSequence)return;
   watches=nextWatches;events=eventResult.data||[];
+  operationalEvents=operationalResult.data||[];operationalLoadError=!!operationalResult.error;
   checkRequests=checkResult.data||[];
   caseChoices=choicesResult.data||[];
   notes=noteResult.data||[];tasks=taskResult.data||[];documents=documentResult.data||[];
@@ -257,7 +280,7 @@ async function loadData() {
   consultationBaselineReady=true;
   $('#consultation-refresh').classList.add('hidden');
   $('#sync-status').innerHTML='<i></i> Datos del panel actualizados';
-  if(eventResult.error||noteResult.error||taskResult.error||documentResult.error){$('#sync-status').textContent='Carga incompleta';toast('Algunos detalles no se pudieron actualizar');}
+  if(eventResult.error||noteResult.error||taskResult.error||documentResult.error||operationalLoadError){$('#sync-status').textContent='Carga incompleta';toast('Algunos detalles no se pudieron actualizar');}
 }
 
 function render() {
@@ -446,19 +469,34 @@ function renderActivity(){
     if(created)eventsByDay.set(created,(eventsByDay.get(created)||0)+1);
     if(sent)alertsByDay.set(sent,(alertsByDay.get(sent)||0)+1);
   }
+  for(const alert of operationalEvents){
+    const sent=dayOf(alert.sent_at);
+    if(sent)alertsByDay.set(sent,(alertsByDay.get(sent)||0)+1);
+  }
+  $('#summary-alert-note').textContent=operationalLoadError?'Los recordatorios no pudieron cargarse. Actualizá para volver a intentar.':'Cambios de estado y recordatorios por correo';
   const dailyEvents=events.filter(event=>isToday(event.created_at));
   $('#summary-date').textContent=new Intl.DateTimeFormat('es-CR',{dateStyle:'full',timeZone:'America/Costa_Rica'}).format(now);
   $('#metric-reviewed-today').textContent=watches.filter(watch=>isToday(watch.last_success_at)).length;
   $('#metric-changes').textContent=dailyEvents.length;
-  $('#metric-sent-today').textContent=alertsByDay.get(today)||0;
+  $('#metric-sent-today').textContent=operationalLoadError?'—':alertsByDay.get(today)||0;
   renderSummaryCharts(today,eventsByDay,alertsByDay);
   // Últimos 7 días (incluye hoy). Los de hoy se resaltan y dicen "Hoy" en lugar de la fecha.
   const sinceDay=BonoCase.todayISO(new Date(now.getTime()-(RECENT_ACTIVITY_DAYS-1)*86400000));
-  const recentEvents=events.filter(event=>{const day=dayOf(event.created_at);return day&&day>=sinceDay;});
+  const recentEvents=[
+    ...events.map(event=>({...event,activity_at:event.created_at})),
+    ...operationalEvents.filter(alert=>alert.sent_at).map(alert=>({...alert,activity_at:alert.sent_at,operational:true}))
+  ].filter(event=>{const day=dayOf(event.activity_at);return day&&day>=sinceDay;})
+    .sort((a,b)=>Date.parse(b.activity_at)-Date.parse(a.activity_at));
   const range=paginationRange(activityPagination,recentEvents.length),pageEvents=recentEvents.slice(range.start,range.end);
   const timeOf=value=>new Intl.DateTimeFormat('es-CR',{timeStyle:'short',timeZone:'America/Costa_Rica'}).format(new Date(value));
-  $('#activity-list').innerHTML=recentEvents.length?pageEvents.map(e=>{const w=watches.find(x=>x.id===e.watch_id),today=isToday(e.created_at);return `<div class="activity${today?' is-today':''}"><span class="activity-dot"></span><div class="activity-body"><p><strong>${escapeHtml(w?.label||'Expediente')}</strong> cambió de estado${w?.case_number?` <span class="activity-case">· Caso ${escapeHtml(w.case_number)}</span>`:''}</p>${activityTransition(e)}<small>${e.status==='sent'?'Correo enviado':e.status==='review_required'?'Requiere revisión':'Notificación pendiente'}</small></div>${today?`<small class="activity-when"><span class="activity-today">Hoy</span> · ${escapeHtml(timeOf(e.created_at))}</small>`:`<small class="activity-when">${escapeHtml(formatDate(e.created_at))}</small>`}</div>`}).join(''):`<div class="empty">No hay cambios registrados en los últimos ${RECENT_ACTIVITY_DAYS} días.</div>`;
-  renderPagination('#activity-pagination',activityPagination,recentEvents.length,renderActivity,{label:'cambios recientes'});
+  $('#activity-list').innerHTML=recentEvents.length?pageEvents.map(e=>{const w=watches.find(x=>x.id===e.watch_id),today=isToday(e.activity_at);return `<div class="activity${today?' is-today':''}"><span class="activity-dot"></span><div class="activity-body"><p><strong>${escapeHtml(w?.label||'Expediente')}</strong> ${e.operational?'recibió un recordatorio':'cambió de estado'}${w?.case_number?` <span class="activity-case">· Caso ${escapeHtml(w.case_number)}</span>`:''}</p>${e.operational?operationalActivity(e):activityTransition(e)}<small>${e.status==='sent'?'Correo enviado':e.status==='review_required'?'Requiere revisión':'Notificación pendiente'}</small></div>${today?`<small class="activity-when"><span class="activity-today">Hoy</span> · ${escapeHtml(timeOf(e.activity_at))}</small>`:`<small class="activity-when">${escapeHtml(formatDate(e.activity_at))}</small>`}</div>`}).join(''):`<div class="empty">No hay cambios ni recordatorios registrados en los últimos ${RECENT_ACTIVITY_DAYS} días.</div>`;
+  renderPagination('#activity-pagination',activityPagination,recentEvents.length,renderActivity,{label:'actividad reciente'});
+}
+
+function operationalActivity(alert){
+  const labels={formalization:'Meta de formalización',document_expiry:'Vencimiento de documento',task_due:'Tarea pendiente',inspection_due:'Próxima inspección'};
+  return '<p>'+escapeHtml(labels[alert.kind]||'Seguimiento operativo')+
+    (alert.deadline_on?' · Fecha de referencia '+escapeHtml(alert.deadline_on):'')+'</p>';
 }
 
 // Muestra "estado anterior → estado actual" de un cambio detectado por el monitor.
@@ -716,7 +754,7 @@ function clearCompanyData(){
   consultationBaselineReady=false;dismissedConsultations='';pendingConsultations='';
   $('#consultation-refresh').classList.add('hidden');
   watchPagination.page=1;watchPagination.pageSize=10;watchPagination.criteria='';activityPagination.page=1;activityPagination.pageSize=10;
-  loadSequence++;watches=[];events=[];checkRequests=[];caseChoices=[];notes=[];tasks=[];documents=[];caseProfiles=[];consents=[];privacyRequests=[];auditEvents=[];currentWatchId=null;intakeAvailable=false;workbookImporter.invalidate();
+  loadSequence++;watches=[];events=[];operationalEvents=[];operationalLoadError=false;checkRequests=[];caseChoices=[];notes=[];tasks=[];documents=[];caseProfiles=[];consents=[];privacyRequests=[];auditEvents=[];currentWatchId=null;intakeAvailable=false;workbookImporter.invalidate();
   $('#detail-dialog').close();$('#add-dialog').close();closeClientPreview();caseManager.close();render();
 }
 async function selectOrganization(id){

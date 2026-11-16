@@ -131,7 +131,7 @@
         <div class="content">
 
         <aside id="consultation-refresh" class="monitor-health hidden" aria-label="Actualización de consultas BANHVI">
-          <p role="status">Hay resultados nuevos de consultas a BANHVI. ¿Querés actualizar el panel?</p>
+          <p role="status">Hay consultas o notificaciones nuevas. ¿Querés actualizar el panel?</p>
           <div class="welcome-actions"><button type="button" id="accept-consultation-refresh" class="primary compact">Actualizar ahora</button><button type="button" id="defer-consultation-refresh" class="ghost">Ahora no</button></div>
         </aside>
         <div id="case-feature-message" class="form-note hidden" role="status"></div>
@@ -140,7 +140,7 @@
           <div class="metrics daily-metrics">
             <article><span>Expedientes consultados hoy</span><strong id="metric-reviewed-today">0</strong><small>con un resultado de BANHVI</small></article>
             <article><span>Cambios detectados hoy</span><strong id="metric-changes">0</strong><small>registrados por el monitor</small></article>
-            <article><span>Alertas enviadas hoy</span><strong id="metric-sent-today">0</strong><small>por correo</small></article>
+            <article><span>Alertas enviadas hoy</span><strong id="metric-sent-today">0</strong><small id="summary-alert-note">Cambios de estado y recordatorios por correo</small></article>
           </div>
           <div class="daily-charts">
             <section class="panel daily-chart" aria-labelledby="weekly-activity-title">
@@ -173,7 +173,7 @@
           </details>
         </section>
         <section class="panel timeline-panel">
-          <div class="panel-head"><div><h3>Cambios recientes</h3><p>Últimos 7 días. Los de hoy aparecen resaltados.</p></div></div>
+          <div class="panel-head"><div><h3>Actividad reciente</h3><p>Cambios y recordatorios de los últimos 7 días. Los de hoy aparecen resaltados.</p></div></div>
           <div id="activity-list" class="activity-list"><div class="empty">No hay cambios registrados en los últimos 7 días.</div></div>
           <div id="activity-pagination"></div>
         </section>
@@ -304,6 +304,6 @@
   <script src="report-analytics.js?v=20261104-1"></script>
   <script src="operations-reports.js?v=20261111-followup2"></script>
   <script src="platform-admin.js?v=20261029-2"></script>
-  <script src="app.js?v=20261113-3aldia"></script>
+  <script src="app.js?v=20261116-alerts"></script>
 </body>
 </html>
