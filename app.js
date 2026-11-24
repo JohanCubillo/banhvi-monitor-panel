@@ -290,7 +290,7 @@ function render() {
   official.value=['__unread','__choose'].includes(selected)||Object.hasOwn(monitorFilters,selected)||labels.includes(selected)?selected:'';
   $('#metric-total').textContent=watches.length;
   $('#metric-active').textContent=watches.filter(w=>w.enabled).length;
-  $('#metric-errors').textContent=watches.filter(w=>trafficStatus(w)==='red').length;
+  $('#metric-errors').textContent=watches.filter(w=>w.enabled&&trafficStatus(w)==='red').length;
   renderWatches($('#search').value);
   renderActivity();
   renderFollowupSummary();
@@ -329,9 +329,12 @@ function renderWatches(query='') {
   const matchesDeadline=info=>!deadline||(!info?.completed&&((deadline==='expired'&&info?.days<0)||(deadline==='0-5'&&info?.days>=0&&info.days<=5)||(deadline==='6-10'&&info?.days>=6&&info.days<=10)||(deadline==='11-30'&&info?.days>=11&&info.days<=30)||(deadline==='31+'&&info?.days>=31)));
   const modality=$('#modality-filter').value,stage=$('#stage-filter').value;
   const officialStatus=$('#official-status-filter').value;
-  const criteria=JSON.stringify([q,status,priority,emitted,deadline,modality,stage,officialStatus,$('#case-sort').value]);
+  const scope=$('#monitoring-scope').value;
+  $('#monitoring-scope').options[0].textContent=`Lista activa (${watches.filter(w=>w.enabled).length})`;
+  $('#monitoring-scope').options[1].textContent=`Conservados, sin monitoreo (${watches.filter(w=>!w.enabled).length})`;
+  const criteria=JSON.stringify([scope,q,status,priority,emitted,deadline,modality,stage,officialStatus,$('#case-sort').value]);
   if(watchPagination.criteria!==criteria){watchPagination.page=1;watchPagination.criteria=criteria;}
-  const rows=watches.filter(w=>BonoCase.matchesCaseSearch(w,profileFor(w)||{},q))
+  const rows=watches.filter(w=>scope==='paused'?!w.enabled:!!w.enabled).filter(w=>BonoCase.matchesCaseSearch(w,profileFor(w)||{},q))
     .filter(w=>!officialStatus||(officialStatus==='__unread'?!w.last_states?.length:officialStatus==='__choose'?needsCaseReview(w):Object.hasOwn(monitorFilters,officialStatus)?monitorFilters[officialStatus].matches(w):latestState(w.last_states)===officialStatus))
     .filter(w=>!status||trafficStatus(w)===status).filter(w=>!priority||w.priority===priority).filter(w=>!modality||profileFor(w)?.modality===modality).filter(w=>!stage||profileFor(w)?.workflow_stage===stage)
     .filter(w=>{const info=formalizationInfo(w),completed=BonoCase.formalizationComplete(w,profileFor(w)||{});return(!emitted||(emitted==='yes'&&info)||(emitted==='no'&&!info)||(emitted==='completed'&&completed)||(emitted==='pending'&&info&&!completed))&&matchesDeadline(info);});
@@ -342,7 +345,7 @@ function renderWatches(query='') {
     <div class="cell"><span class="cell-label">Caso BANHVI</span><strong>${w.case_number?`#${escapeHtml(w.case_number)}`:'Caso aún no obtenido'}</strong><small>Gestión interna: ${escapeHtml(BonoCase.stages.find(s=>s.id===profileFor(w)?.workflow_stage)?.label||'por configurar')}</small></div>
     <div class="cell"><span class="cell-label">Estado BANHVI (consulta)</span><strong>${escapeHtml(latestState(w.last_states))}</strong>${w.last_success_at?`<small>Última consulta completada: ${escapeHtml(formatDate(w.last_success_at))}</small>`:''}${consultationNoticeHtml(w)}${queuedCheckHtml(w)}${formalizationRowHtml(w)}${profileFor(w)?`<small>${escapeHtml(documentationLabel(profileFor(w)))}</small>`:''}</div>
     <div><span class="badge ${needsCaseReview(w)?'case-selection':w.last_error?'error':w.enabled?'':'paused'}">${needsCaseReview(w)?escapeHtml(caseReviewLabel(w)):w.last_error?'Revisar consulta':w.enabled?'Monitoreo activo':'Monitoreo pausado'}</span></div>
-    <div class="row-actions"><button data-detail="${w.id}" title="Ver estados y gestionar">${needsCaseReview(w)&&!caseChoices.some(c=>c.watch_id===w.id&&c.selected_case_number)?w.case_number?'Revisar casos':'Elegir caso':'Ver'}</button>${canEditCases()?`<button data-check="${w.id}" title="Solicitar revisión prioritaria en la próxima ejecución del robot" ${!w.enabled||checkRequests.some(r=>r.watch_id===w.id&&r.status==='pending')?'disabled':''}>${checkRequests.some(r=>r.watch_id===w.id&&r.status==='pending')?'Consulta en cola':'Consultar BANHVI'}</button><button data-toggle="${w.id}" title="${w.enabled?'Pausar':'Activar'}">${w.enabled?'Pausar':'Activar'}</button>`:''}</div>
+    <div class="row-actions"><button data-detail="${w.id}" title="Ver estados y gestionar">${needsCaseReview(w)&&!caseChoices.some(c=>c.watch_id===w.id&&c.selected_case_number)?w.case_number?'Revisar casos':'Elegir caso':'Ver'}</button>${canEditCases()&&scope!=='paused'?`<button data-check="${w.id}" title="Solicitar revisión prioritaria en la próxima ejecución del robot" ${!w.enabled||checkRequests.some(r=>r.watch_id===w.id&&r.status==='pending')?'disabled':''}>${checkRequests.some(r=>r.watch_id===w.id&&r.status==='pending')?'Consulta en cola':'Consultar BANHVI'}</button><button data-toggle="${w.id}" title="${w.enabled?'Pausar':'Activar'}">${w.enabled?'Pausar':'Activar'}</button>`:''}</div>
   </article>`).join(''):'<div class="empty">No encontramos expedientes.</div>';
   document.querySelectorAll('[data-detail]').forEach(b=>b.onclick=()=>openDetail(b.dataset.detail));
   document.querySelectorAll('[data-toggle]').forEach(b=>b.onclick=()=>toggleWatch(b.dataset.toggle));
@@ -806,6 +809,11 @@ $('#defer-consultation-refresh').onclick=()=>{
 $('#export-btn').onclick=exportExcel;
 ['#status-filter','#priority-filter','#deadline-filter','#modality-filter','#stage-filter','#case-sort'].forEach(selector=>$(selector).onchange=()=>renderWatches($('#search').value));
 const isFormalizedFilter=()=>/^FORMALIZAD[OA]$/i.test($('#official-status-filter').value);
+$('#monitoring-scope').onchange=()=>{
+  $('#search').value='';
+  ['#status-filter','#priority-filter','#emitted-filter','#deadline-filter','#modality-filter','#stage-filter','#official-status-filter'].forEach(selector=>$(selector).value='');
+  renderWatches();
+};
 $('#emitted-filter').onchange=()=>{
   if($('#emitted-filter').value==='pending'&&isFormalizedFilter())$('#official-status-filter').value='';
   renderWatches($('#search').value);
@@ -818,6 +826,7 @@ $('#official-status-filter').onchange=()=>{
   renderWatches($('#search').value);
 };
 function showMonitorFilter(filter){
+  $('#monitoring-scope').value='active';
   $('#search').value='';
   ['#status-filter','#priority-filter','#emitted-filter','#deadline-filter','#modality-filter','#stage-filter'].forEach(selector=>$(selector).value='');
   $('#official-status-filter').value=filter;
