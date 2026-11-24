@@ -14,6 +14,7 @@ const landingView = $('#landing-view');
 let watches = [];
 let events = [];
 let operationalEvents = [];
+let storedCaseCount = 0;
 let operationalLoadError = false;
 let checkRequests = [];
 let caseChoices = [];
@@ -48,7 +49,7 @@ const canEditCases = () => ['owner','admin','agent'].includes(currentMembership?
 const caseManager = BonoManagement.mount({container:'#integral-case-management',client,getContext:()=>({organization:currentOrganization,membership:currentMembership,intakeAvailable}),onSaved:async()=>{await loadData();const watch=watches.find(w=>w.id===currentWatchId);if(watch)$('#internal-deadline').innerHTML=formalizationHtml(watch);},toast});
 const operationsReports = BonoReports.mount({container:'#operations-reports',getData:()=>({organizationId:currentOrganization?.id,watches,profiles:caseProfiles,events,documents,tasks}),onOpen:id=>openDetail(id),canExport:()=>['owner','admin'].includes(currentMembership?.role),toast});
 const platformManager = BonoPlatform.mount({container:'#platform-admin',client,getContext:()=>({isPlatformAdmin,currentOrganization}),onChanged:async()=>{if(sessionUser)await showSession({user:sessionUser});},toast});
-const workbookImporter=BonoImport.mount({client,getContext:()=>({organization:currentOrganization,membership:currentMembership,userId:sessionUser?.id,watches,intakeAvailable}),onImported:async()=>loadData(),toast});
+const workbookImporter=BonoImport.mount({client,getContext:()=>({organization:currentOrganization,membership:currentMembership,userId:sessionUser?.id,watches,usedCases:storedCaseCount,intakeAvailable}),onImported:async()=>loadData(),toast});
 
 const needsCaseReview=watch=>watch.last_error==='CASE_SELECTION_REQUIRED';
 function caseReviewLabel(watch){
@@ -247,7 +248,12 @@ async function loadData() {
   const watchResult=await readRows('monitor_watches','*',q=>q.eq('organization_id',organizationId));
   if(sequence!==loadSequence)return;
   if(watchResult.error){$('#sync-status').textContent='Error de actualización';toast('No fue posible cargar los expedientes de esta empresa');return;}
-  const nextWatches=watchResult.data||[],ids=nextWatches.map(w=>w.id);
+  const savedWatches=watchResult.data||[];
+  storedCaseCount=savedWatches.length;
+  const hidePreserved=currentOrganization.name?.trim().toUpperCase()==='SUDECO';
+  const nextWatches=hidePreserved?savedWatches.filter(w=>w.enabled):savedWatches,ids=nextWatches.map(w=>w.id);
+  $('#monitoring-scope').classList.toggle('hidden',hidePreserved);
+  if(hidePreserved)$('#monitoring-scope').value='active';
   const [eventResult,noteResult,taskResult,documentResult,profileResult,intakeProbe,checkResult,choicesResult,operationalResult]=await Promise.all([
     readWatchRows('monitor_outbox','id,watch_id,status,created_at,sent_at,before_states,after_states',ids),
     readWatchRows('monitor_notes','*',ids),readWatchRows('monitor_tasks','*',ids),readWatchRows('monitor_documents','*',ids),
@@ -757,7 +763,7 @@ function clearCompanyData(){
   consultationBaselineReady=false;dismissedConsultations='';pendingConsultations='';
   $('#consultation-refresh').classList.add('hidden');
   watchPagination.page=1;watchPagination.pageSize=10;watchPagination.criteria='';activityPagination.page=1;activityPagination.pageSize=10;
-  loadSequence++;watches=[];events=[];operationalEvents=[];operationalLoadError=false;checkRequests=[];caseChoices=[];notes=[];tasks=[];documents=[];caseProfiles=[];consents=[];privacyRequests=[];auditEvents=[];currentWatchId=null;intakeAvailable=false;workbookImporter.invalidate();
+  loadSequence++;storedCaseCount=0;watches=[];events=[];operationalEvents=[];operationalLoadError=false;checkRequests=[];caseChoices=[];notes=[];tasks=[];documents=[];caseProfiles=[];consents=[];privacyRequests=[];auditEvents=[];currentWatchId=null;intakeAvailable=false;workbookImporter.invalidate();
   $('#detail-dialog').close();$('#add-dialog').close();closeClientPreview();caseManager.close();render();
 }
 async function selectOrganization(id){
